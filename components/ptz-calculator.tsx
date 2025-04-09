@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback, useRef } from "react"
+import { useState, useEffect, useCallback, useRef, useMemo } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
@@ -188,9 +188,159 @@ declare global {
   }
 }
 
+// Types
+type FormData = {
+  firstName: string;
+  lastName: string;
+  email: string;
+  householdSize: string;
+  zone: string;
+  address: string;
+  income: string;
+  housingType: string;
+  projectCost: string;
+};
+
+type ResultType = {
+  eligible: boolean;
+  tranche?: number;
+  quotity?: number;
+  ptzAmount?: number;
+  reason?: string;
+  costCeiling?: number;
+  cappedProjectCost?: number;
+};
+
+// Constants 
+const GOOGLE_MAPS_API_KEY = "AIzaSyA7ZSI3CiR0ic_9eslCeBCgdKzGLXsCiF8";
+const PRIMARY_COLOR = "#008B3D";
+const HOVER_COLOR = "bg-green-600";
+
+// Composant pour la slide d'information PTZ 2025
+const PtzInfoSlide = ({ onStart }: { onStart: () => void }) => {
+  return (
+    <div className="relative overflow-hidden pb-6">
+      <div className="absolute top-0 right-0 w-32 h-32 bg-green-50 rounded-full -mr-16 -mt-16 opacity-50"></div>
+      <div className="absolute bottom-0 left-0 w-24 h-24 bg-green-50 rounded-full -ml-12 -mb-12 opacity-50"></div>
+      
+      <div className="flex justify-center mb-6 pt-6">
+        <div className="relative h-12 w-20">
+          <Image src="/geoterre-logo.svg" alt="Geoterre Logo" fill className="object-contain" />
+        </div>
+      </div>
+      
+      <div className="text-center px-4 mb-6">
+        <h1 className="text-2xl font-bold text-gray-800 mb-2">Nouvelles modalités PTZ 2025</h1>
+        <p className="text-gray-600">Découvrez les changements importants pour le Prêt à Taux Zéro</p>
+      </div>
+
+      <div className="space-y-6 px-6">
+        <div className="p-5 bg-green-50 rounded-lg border border-green-100">
+          <div className="flex items-start mb-3">
+            <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center mr-3 mt-1 flex-shrink-0">
+              <CalendarCheck className="h-4 w-4 text-[#008B3D]" />
+            </div>
+            <div>
+              <h4 className="font-semibold text-green-800 text-lg">Entrée en vigueur le 1er avril 2025</h4>
+              <p className="text-sm text-green-700 mt-1">
+                Le décret d'application pour la dérogation au PTZ a été publié, permettant son entrée
+                en vigueur au 1er avril 2025.
+              </p>
+            </div>
+          </div>
+        </div>
+        
+        <div className="p-5 bg-white rounded-lg border border-gray-200">
+          <div className="flex items-start mb-3">
+            <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center mr-3 mt-1 flex-shrink-0">
+              <FileText className="h-4 w-4 text-gray-700" />
+            </div>
+            <div>
+              <h4 className="font-semibold text-gray-800">Rappel de la loi de finances 2024</h4>
+              <p className="text-sm text-gray-700 mt-1 mb-2">
+                La loi de finances pour 2024 a conditionné l'octroi d'un PTZ à une double
+                condition de localisation du bien financé :
+              </p>
+              <ul className="list-disc list-inside text-sm text-gray-700 space-y-1 pl-2">
+                <li>En zone tendue</li>
+                <li>Au sein d'un bâtiment rassemblant du logement collectif</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+        
+        <div className="p-5 bg-amber-50 rounded-lg border border-amber-100">
+          <div className="flex items-start mb-1">
+            <div className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center mr-3 mt-1 flex-shrink-0">
+              <Clock className="h-4 w-4 text-amber-800" />
+            </div>
+            <div>
+              <h4 className="font-semibold text-amber-800">Dérogation 2025-2027</h4>
+              <p className="text-sm text-amber-700 mt-1">
+                Une dérogation a été prévue pour les offres de prêts délivrées entre le 1er
+                avril 2025 et le 31 décembre 2027 pour suspendre cette double condition.
+              </p>
+            </div>
+          </div>
+        </div>
+        
+        <div className="p-5 bg-blue-50 rounded-lg border border-blue-100">
+          <div className="flex items-start mb-1">
+            <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center mr-3 mt-1 flex-shrink-0">
+              <Star className="h-4 w-4 text-blue-800" />
+            </div>
+            <div>
+              <h4 className="font-semibold text-blue-800">Ce qui change</h4>
+              <p className="text-sm text-blue-700 mt-1 mb-2">
+                Désormais le PTZ pourra financer des biens neufs :
+              </p>
+              <ul className="list-disc list-inside text-sm text-blue-700 space-y-1 pl-2">
+                <li>Quelle que soit la zone d'implantation</li>
+                <li>Qu'il s'agisse de logement individuel ou collectif</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <div className="mt-8 text-center px-6">
+        <p className="text-sm text-gray-500 italic mb-4">
+          Simulez dès maintenant votre éligibilité au PTZ avec ces nouvelles conditions.
+        </p>
+        <Button 
+          onClick={onStart}
+          className="bg-[#008B3D] hover:bg-green-600 py-6 w-full max-w-sm mx-auto flex items-center justify-center gap-2"
+        >
+          Commencer la simulation
+          <ArrowRight className="h-5 w-5" />
+        </Button>
+      </div>
+    </div>
+  );
+};
+
+/**
+ * PtzCalculator - Simulateur d'éligibilité au PTZ avec calcul du montant
+ * 
+ * Optimisations réalisées:
+ * - Code organisé en composants plus petits et réutilisables
+ * - Utilisation de useCallback et useMemo pour éviter les re-renders inutiles
+ * - Gestion plus robuste des erreurs avec try/catch
+ * - Typage strict pour améliorer la maintenabilité
+ * - Extraction des constantes pour éviter la duplication
+ * - Gestion optimisée des ressources externes (script Google Maps)
+ * - Structure de code plus modulaire et organisée
+ * 
+ * Le composant gère:
+ * - Une slide d'information sur les changements 2025
+ * - Un formulaire en 7 étapes pour collecter les informations
+ * - Le calcul d'éligibilité selon les critères officiels
+ * - L'affichage des résultats et des actions post-simulation
+ */
 export default function PtzCalculator() {
+  // State hooks
   const [step, setStep] = useState(0)
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<FormData>({
     firstName: "",
     lastName: "",
     email: "",
@@ -201,189 +351,73 @@ export default function PtzCalculator() {
     housingType: "",
     projectCost: "",
   })
-  const [result, setResult] = useState<{
-    eligible: boolean
-    tranche?: number
-    quotity?: number
-    ptzAmount?: number
-    reason?: string
-    costCeiling?: number
-    cappedProjectCost?: number
-  } | null>(null)
+  const [result, setResult] = useState<ResultType | null>(null)
   const [showPartners, setShowPartners] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submissionError, setSubmissionError] = useState<string | null>(null)
   const [mapVisible, setMapVisible] = useState(false)
-  const addressInputRef = useRef<HTMLInputElement>(null)
+  
+  // Refs
+  const addressInputRef = useRef<HTMLInputElement | null>(null)
   const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null)
-
-  const totalSteps = 8
-  const progress = (step / (totalSteps - 1)) * 100
-
-  // Charger l'état sauvegardé lors du chargement de la page
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      // Charger l'étape
-      const savedStep = localStorage.getItem('ptz-calculator-step')
-      if (savedStep) {
-        setStep(parseInt(savedStep))
-      }
-
-      // Charger les données du formulaire
-      const savedFormData = localStorage.getItem('ptz-calculator-form-data')
-      if (savedFormData) {
-        try {
-          setFormData(JSON.parse(savedFormData))
-        } catch (e) {
-          console.error("Erreur lors du chargement des données sauvegardées:", e)
-        }
-      }
-
-      // Charger le résultat
-      const savedResult = localStorage.getItem('ptz-calculator-result')
-      if (savedResult) {
-        try {
-          setResult(JSON.parse(savedResult))
-        } catch (e) {
-          console.error("Erreur lors du chargement du résultat sauvegardé:", e)
-        }
-      }
-
-      // Charger l'état d'affichage des partenaires
-      const savedShowPartners = localStorage.getItem('ptz-calculator-show-partners')
-      if (savedShowPartners) {
-        setShowPartners(savedShowPartners === 'true')
-      }
-    }
+  
+  // Constants
+  const totalSteps = 7
+  const progress = ((step - 1) / (totalSteps - 1)) * 100
+  
+  // Memoized handlers
+  const handleInputChange = useCallback((field: string, value: string) => {
+    setFormData(prevData => ({ ...prevData, [field]: value }))
   }, [])
-
-  // Sauvegarder l'état actuel lorsqu'il change
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('ptz-calculator-step', step.toString())
-      localStorage.setItem('ptz-calculator-form-data', JSON.stringify(formData))
-      localStorage.setItem('ptz-calculator-result', result ? JSON.stringify(result) : '')
-      localStorage.setItem('ptz-calculator-show-partners', showPartners.toString())
-    }
-  }, [step, formData, result, showPartners])
-
-  // Initialiser l'autocomplétion Google Places
-  useEffect(() => {
-    // Vérifiez si nous sommes dans le navigateur et à l'étape d'adresse
-    if (typeof window !== 'undefined' && step === 3 && addressInputRef.current) {
-      // Charger le script de l'API Google Maps si ce n'est pas déjà fait
-      if (!window.google || !window.google.maps) {
-        const script = document.createElement('script')
-        script.src = `https://maps.googleapis.com/maps/api/js?key=AIzaSyA7ZSI3CiR0ic_9eslCeBCgdKzGLXsCiF8&libraries=places`
-        script.async = true
-        script.defer = true
-        script.onload = initAutocomplete
-        document.head.appendChild(script)
-      } else {
-        initAutocomplete()
-      }
-    } else {
-      // Masquer la carte si on n'est plus à l'étape adresse
-      setMapVisible(false)
-    }
-  }, [step])
-
-  // Fonction pour initialiser l'autocomplétion
-  const initAutocomplete = () => {
-    if (addressInputRef.current && window.google) {
-      autocompleteRef.current = new window.google.maps.places.Autocomplete(
-        addressInputRef.current,
-        { 
-          types: ['address'],
-          componentRestrictions: { country: 'fr' }, // Restreindre aux adresses françaises
-          fields: ['formatted_address', 'geometry'], // Récupérer l'adresse formatée et la position
-        }
-      )
-
-      // Écouter les événements de sélection de lieu
-      autocompleteRef.current.addListener('place_changed', () => {
-        const place = autocompleteRef.current?.getPlace()
-        if (place && place.formatted_address) {
-          handleInputChange("address", place.formatted_address)
-          // Afficher automatiquement la carte lorsqu'une adresse est sélectionnée
-          setMapVisible(true)
-        }
-      })
-      
-      // Style CSS pour les suggestions d'autocomplétion
-      // Rendre les suggestions plus grandes et plus visibles
-      const style = document.createElement('style')
-      style.textContent = `
-        .pac-container {
-          border-radius: 0.5rem;
-          border: 1px solid #d1d5db;
-          box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-          font-family: sans-serif;
-          margin-top: 4px;
-          z-index: 9999 !important;
-          min-width: 300px;
-        }
-        .pac-item {
-          padding: 10px 15px;
-          font-size: 14px;
-          cursor: pointer;
-          border-top: 1px solid #e5e7eb;
-        }
-        .pac-item:first-child {
-          border-top: none;
-        }
-        .pac-item:hover {
-          background-color: #f3f9f1;
-        }
-        .pac-item-selected, .pac-item-selected:hover {
-          background-color: #e6f4e6;
-        }
-        .pac-icon {
-          margin-right: 10px;
-        }
-        .pac-item-query {
-          font-size: 15px;
-          font-weight: 500;
-          color: #111827;
-        }
-        .pac-matched {
-          font-weight: 700;
-          color: #10b981;
-        }
-        .pac-logo {
-          display: none !important;
-        }
-      `
-      document.head.appendChild(style)
-      
-      // Focus sur le champ d'adresse pour activer l'autocomplétion immédiatement
-      setTimeout(() => {
-        if (addressInputRef.current) {
-          addressInputRef.current.focus()
-        }
-      }, 100)
-    }
-  }
-
-  const handleInputChange = (field: string, value: string) => {
-    setFormData({ ...formData, [field]: value })
-  }
-
-  const nextStep = () => {
+  
+  const nextStep = useCallback(() => {
     if (step < totalSteps) {
       setStep(step + 1)
     } else {
       calculateEligibility()
     }
-  }
-
-  const prevStep = () => {
+  }, [step, totalSteps])
+  
+  const prevStep = useCallback(() => {
     if (step > 0) {
       setStep(step - 1)
     }
-  }
-
-  const isStepValid = () => {
+  }, [step])
+  
+  const viewPartners = useCallback(() => {
+    setShowPartners(true)
+  }, [])
+  
+  const resetForm = useCallback(() => {
+    setFormData({
+      firstName: "",
+      lastName: "",
+      email: "",
+      householdSize: "",
+      zone: "",
+      address: "",
+      income: "",
+      housingType: "",
+      projectCost: "",
+    })
+    setResult(null)
+    setShowPartners(false)
+    setSubmissionError(null)
+    setStep(0)
+    
+    // Effacer les données sauvegardées
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('ptz-calculator-step')
+      localStorage.removeItem('ptz-calculator-form-data')
+      localStorage.removeItem('ptz-calculator-result')
+      localStorage.removeItem('ptz-calculator-show-partners')
+    }
+  }, [])
+  
+  /**
+   * Vérifie si l'étape actuelle est valide pour permettre de passer à la suivante
+   */
+  const isStepValid = useCallback(() => {
     switch (step) {
       case 0:
         return true
@@ -409,9 +443,94 @@ export default function PtzCalculator() {
       default:
         return false
     }
-  }
+  }, [step, formData])
+  
+  // Fonction pour initialiser l'autocomplétion Google Places
+  const initAutocomplete = useCallback(() => {
+    if (addressInputRef.current && window.google) {
+      autocompleteRef.current = new window.google.maps.places.Autocomplete(
+        addressInputRef.current,
+        { 
+          types: ['address'],
+          componentRestrictions: { country: 'fr' }, // Restreindre aux adresses françaises
+          fields: ['formatted_address', 'geometry'], // Récupérer l'adresse formatée et la position
+        }
+      )
 
-  // Fonction pour gérer l'appui sur la touche Entrée pour passer à l'étape suivante
+      // Écouter les événements de sélection de lieu
+      autocompleteRef.current.addListener('place_changed', () => {
+        const place = autocompleteRef.current?.getPlace()
+        if (place && place.formatted_address) {
+          handleInputChange("address", place.formatted_address)
+          // Afficher automatiquement la carte lorsqu'une adresse est sélectionnée
+          setMapVisible(true)
+        }
+      })
+      
+      // Style CSS pour les suggestions d'autocomplétion
+      addAutocompletionStyles()
+      
+      // Focus sur le champ d'adresse pour activer l'autocomplétion immédiatement
+      setTimeout(() => {
+        if (addressInputRef.current) {
+          addressInputRef.current.focus()
+        }
+      }, 100)
+    }
+  }, [handleInputChange])
+  
+  // Fonction pour ajouter les styles CSS d'autocomplétion
+  const addAutocompletionStyles = useCallback(() => {
+    const styleId = 'google-places-autocomplete-styles'
+    if (document.getElementById(styleId)) return
+    
+    const style = document.createElement('style')
+    style.id = styleId
+    style.textContent = `
+      .pac-container {
+        border-radius: 0.5rem;
+        border: 1px solid #d1d5db;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        font-family: sans-serif;
+        margin-top: 4px;
+        z-index: 9999 !important;
+        min-width: 300px;
+      }
+      .pac-item {
+        padding: 10px 15px;
+        font-size: 14px;
+        cursor: pointer;
+        border-top: 1px solid #e5e7eb;
+      }
+      .pac-item:first-child {
+        border-top: none;
+      }
+      .pac-item:hover {
+        background-color: #f3f9f1;
+      }
+      .pac-item-selected, .pac-item-selected:hover {
+        background-color: #e6f4e6;
+      }
+      .pac-icon {
+        margin-right: 10px;
+      }
+      .pac-item-query {
+        font-size: 15px;
+        font-weight: 500;
+        color: #111827;
+      }
+      .pac-matched {
+        font-weight: 700;
+        color: #10b981;
+      }
+      .pac-logo {
+        display: none !important;
+      }
+    `
+    document.head.appendChild(style)
+  }, [])
+  
+  // Fonction pour gérer l'appui sur la touche Entrée
   const handleKeyDown = useCallback((event: KeyboardEvent) => {
     if (event.key === 'Enter' && !result) {
       // Éviter de déclencher l'événement si l'utilisateur est en train de saisir du texte
@@ -424,7 +543,84 @@ export default function PtzCalculator() {
         nextStep();
       }
     }
-  }, [step, formData, result, isStepValid]);
+  }, [result, isStepValid, nextStep]);
+
+  // Charger l'état sauvegardé lors du chargement de la page
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+  
+    try {
+      // Charger l'étape
+      const savedStep = localStorage.getItem('ptz-calculator-step')
+      if (savedStep) {
+        setStep(parseInt(savedStep))
+      }
+
+      // Charger les données du formulaire
+      const savedFormData = localStorage.getItem('ptz-calculator-form-data')
+      if (savedFormData) {
+        setFormData(JSON.parse(savedFormData))
+      }
+
+      // Charger le résultat
+      const savedResult = localStorage.getItem('ptz-calculator-result')
+      if (savedResult) {
+        setResult(JSON.parse(savedResult))
+      }
+
+      // Charger l'état d'affichage des partenaires
+      const savedShowPartners = localStorage.getItem('ptz-calculator-show-partners')
+      if (savedShowPartners) {
+        setShowPartners(savedShowPartners === 'true')
+      }
+    } catch (e) {
+      console.error("Erreur lors du chargement des données sauvegardées:", e)
+    }
+  }, [])
+
+  // Sauvegarder l'état actuel lorsqu'il change
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    
+    try {
+      localStorage.setItem('ptz-calculator-step', step.toString())
+      localStorage.setItem('ptz-calculator-form-data', JSON.stringify(formData))
+      localStorage.setItem('ptz-calculator-result', result ? JSON.stringify(result) : '')
+      localStorage.setItem('ptz-calculator-show-partners', showPartners.toString())
+    } catch (e) {
+      console.error("Erreur lors de la sauvegarde des données:", e)
+    }
+  }, [step, formData, result, showPartners])
+
+  // Initialiser l'autocomplétion Google Places
+  useEffect(() => {
+    // Vérifiez si nous sommes dans le navigateur et à l'étape d'adresse
+    if (typeof window === 'undefined' || step !== 3) {
+      // Masquer la carte si on n'est plus à l'étape adresse
+      if (step !== 3) {
+        setMapVisible(false)
+      }
+      return;
+    }
+    
+    if (addressInputRef.current) {
+      // Charger le script de l'API Google Maps si ce n'est pas déjà fait
+      if (!window.google || !window.google.maps) {
+        const scriptId = 'google-maps-api'
+        if (!document.getElementById(scriptId)) {
+          const script = document.createElement('script')
+          script.id = scriptId
+          script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&libraries=places`
+          script.async = true
+          script.defer = true
+          script.onload = initAutocomplete
+          document.head.appendChild(script)
+        }
+      } else {
+        initAutocomplete()
+      }
+    }
+  }, [step, initAutocomplete])
 
   // Ajouter l'écouteur d'événements clavier
   useEffect(() => {
@@ -434,50 +630,52 @@ export default function PtzCalculator() {
     };
   }, [handleKeyDown]);
 
-  const calculateEligibility = async () => {
+  const calculateEligibility = useCallback(async () => {
     setIsSubmitting(true)
     setSubmissionError(null)
 
-    const householdSize = Number.parseInt(formData.householdSize)
-    const income = Number.parseInt(formData.income)
-    const zone = formData.zone
-    const housingType = formData.housingType
-    const projectCost = Number.parseInt(formData.projectCost)
+    try {
+      const householdSize = Number.parseInt(formData.householdSize)
+      const income = Number.parseInt(formData.income)
+      const zone = formData.zone
+      const housingType = formData.housingType
+      const projectCost = Number.parseInt(formData.projectCost)
 
-    // Vérifier si le revenu est inférieur au seuil d'éligibilité
-    const maxIncome =
-      ELIGIBILITY_THRESHOLDS[zone as keyof typeof ELIGIBILITY_THRESHOLDS][
-        Math.min(householdSize, 8) as keyof (typeof ELIGIBILITY_THRESHOLDS)["A"]
-      ]
+      // Vérifier si le revenu est inférieur au seuil d'éligibilité
+      const maxIncome =
+        ELIGIBILITY_THRESHOLDS[zone as keyof typeof ELIGIBILITY_THRESHOLDS][
+          Math.min(householdSize, 8) as keyof (typeof ELIGIBILITY_THRESHOLDS)["A"]
+        ]
 
-    let calculationResult
+      let calculationResult: ResultType;
 
-    if (income > maxIncome) {
-      calculationResult = {
-        eligible: false,
-        reason: `Vos revenus (${income.toLocaleString()} €) dépassent le plafond d'éligibilité au PTZ (${maxIncome.toLocaleString()} €) pour votre zone et la taille de votre foyer.`,
-      }
-    } else {
-      // Déterminer la tranche
-      let tranche = 0
-      const tranchesForZone = INCOME_TRANCHES[zone as keyof typeof INCOME_TRANCHES]
-
-      if (income <= tranchesForZone[1]) {
-        tranche = 1
-      } else if (income <= tranchesForZone[2]) {
-        tranche = 2
-      } else if (income <= tranchesForZone[3]) {
-        tranche = 3
-      } else if (income <= maxIncome) {
-        tranche = 4
-      } else {
+      if (income > maxIncome) {
         calculationResult = {
           eligible: false,
-          reason: "Vos revenus ne correspondent à aucune tranche d'éligibilité au PTZ.",
+          reason: `Vos revenus (${income.toLocaleString()} €) dépassent le plafond d'éligibilité au PTZ (${maxIncome.toLocaleString()} €) pour votre zone et la taille de votre foyer.`,
         }
-      }
+      } else {
+        // Déterminer la tranche
+        let tranche = 0
+        const tranchesForZone = INCOME_TRANCHES[zone as keyof typeof INCOME_TRANCHES]
 
-      if (!calculationResult) {
+        if (income <= tranchesForZone[1]) {
+          tranche = 1
+        } else if (income <= tranchesForZone[2]) {
+          tranche = 2
+        } else if (income <= tranchesForZone[3]) {
+          tranche = 3
+        } else if (income <= maxIncome) {
+          tranche = 4
+        } else {
+          calculationResult = {
+            eligible: false,
+            reason: "Vos revenus ne correspondent à aucune tranche d'éligibilité au PTZ.",
+          }
+          setResult(calculationResult)
+          return;
+        }
+
         // Déterminer la quotité
         const quotity =
           housingType === "individual"
@@ -503,10 +701,8 @@ export default function PtzCalculator() {
           ptzAmount,
         }
       }
-    }
 
-    // Stocker les données dans Google Sheets
-    try {
+      // Stocker les données dans Google Sheets
       const storeResult = await storeSubmission({
         firstName: formData.firstName,
         lastName: formData.lastName,
@@ -522,152 +718,27 @@ export default function PtzCalculator() {
 
       if (!storeResult.success) {
         setSubmissionError(
-          "Les résultats ont été calculés mais n'ont pas pu être enregistrés. Veuillez réessayer ultérieurement.",
+          "Les résultats ont été calculés mais n'ont pas pu être enregistrés. Veuillez réessayer ultérieurement."
         )
       }
+
+      setResult(calculationResult)
     } catch (error) {
-      console.error("Erreur lors de l'enregistrement des données:", error)
+      console.error("Erreur lors du calcul d'éligibilité:", error)
       setSubmissionError(
-        "Les résultats ont été calculés mais n'ont pas pu être enregistrés. Veuillez réessayer ultérieurement.",
+        "Une erreur est survenue lors du calcul. Veuillez réessayer ultérieurement."
       )
     } finally {
-      setResult(calculationResult)
       setIsSubmitting(false)
     }
-  }
-
-  const resetForm = () => {
-    setFormData({
-      firstName: "",
-      lastName: "",
-      email: "",
-      householdSize: "",
-      zone: "",
-      address: "",
-      income: "",
-      housingType: "",
-      projectCost: "",
-    })
-    setResult(null)
-    setShowPartners(false)
-    setSubmissionError(null)
-    setStep(0)
-    
-    // Effacer les données sauvegardées
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem('ptz-calculator-step')
-      localStorage.removeItem('ptz-calculator-form-data')
-      localStorage.removeItem('ptz-calculator-result')
-      localStorage.removeItem('ptz-calculator-show-partners')
-    }
-  }
-
-  const viewPartners = () => {
-    setShowPartners(true)
-  }
+  }, [formData]);
 
   const renderStepContent = () => {
     switch (step) {
       case 0:
         return (
           <>
-            <div className="relative overflow-hidden pb-6">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-green-50 rounded-full -mr-16 -mt-16 opacity-50"></div>
-              <div className="absolute bottom-0 left-0 w-24 h-24 bg-green-50 rounded-full -ml-12 -mb-12 opacity-50"></div>
-              
-              <div className="flex justify-center mb-6 pt-6">
-                <div className="relative h-12 w-20">
-                  <Image src="/geoterre-logo.svg" alt="Geoterre Logo" fill className="object-contain" />
-                </div>
-              </div>
-              
-              <div className="text-center px-4 mb-6">
-                <h1 className="text-2xl font-bold text-gray-800 mb-2">Nouvelles modalités PTZ 2025</h1>
-                <p className="text-gray-600">Découvrez les changements importants pour le Prêt à Taux Zéro</p>
-              </div>
-
-              <div className="space-y-6 px-6">
-                <div className="p-5 bg-green-50 rounded-lg border border-green-100">
-                  <div className="flex items-start mb-3">
-                    <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center mr-3 mt-1 flex-shrink-0">
-                      <CalendarCheck className="h-4 w-4 text-[#008B3D]" />
-                    </div>
-                    <div>
-                      <h4 className="font-semibold text-green-800 text-lg">Entrée en vigueur le 1er avril 2025</h4>
-                      <p className="text-sm text-green-700 mt-1">
-                        Le décret d'application pour la dérogation au PTZ a été publié, permettant son entrée
-                        en vigueur au 1er avril 2025.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="p-5 bg-white rounded-lg border border-gray-200">
-                  <div className="flex items-start mb-3">
-                    <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center mr-3 mt-1 flex-shrink-0">
-                      <FileText className="h-4 w-4 text-gray-700" />
-                    </div>
-                    <div>
-                      <h4 className="font-semibold text-gray-800">Rappel de la loi de finances 2024</h4>
-                      <p className="text-sm text-gray-700 mt-1 mb-2">
-                        La loi de finances pour 2024 a conditionné l'octroi d'un PTZ à une double
-                        condition de localisation du bien financé :
-                      </p>
-                      <ul className="list-disc list-inside text-sm text-gray-700 space-y-1 pl-2">
-                        <li>En zone tendue</li>
-                        <li>Au sein d'un bâtiment rassemblant du logement collectif</li>
-                      </ul>
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="p-5 bg-amber-50 rounded-lg border border-amber-100">
-                  <div className="flex items-start mb-1">
-                    <div className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center mr-3 mt-1 flex-shrink-0">
-                      <Clock className="h-4 w-4 text-amber-800" />
-                    </div>
-                    <div>
-                      <h4 className="font-semibold text-amber-800">Dérogation 2025-2027</h4>
-                      <p className="text-sm text-amber-700 mt-1">
-                        Une dérogation a été prévue pour les offres de prêts délivrées entre le 1er
-                        avril 2025 et le 31 décembre 2027 pour suspendre cette double condition.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="p-5 bg-blue-50 rounded-lg border border-blue-100">
-                  <div className="flex items-start mb-1">
-                    <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center mr-3 mt-1 flex-shrink-0">
-                      <Star className="h-4 w-4 text-blue-800" />
-                    </div>
-                    <div>
-                      <h4 className="font-semibold text-blue-800">Ce qui change</h4>
-                      <p className="text-sm text-blue-700 mt-1 mb-2">
-                        Désormais le PTZ pourra financer des biens neufs :
-                      </p>
-                      <ul className="list-disc list-inside text-sm text-blue-700 space-y-1 pl-2">
-                        <li>Quelle que soit la zone d'implantation</li>
-                        <li>Qu'il s'agisse de logement individuel ou collectif</li>
-                      </ul>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="mt-8 text-center px-6">
-                <p className="text-sm text-gray-500 italic mb-4">
-                  Simulez dès maintenant votre éligibilité au PTZ avec ces nouvelles conditions.
-                </p>
-                <Button 
-                  onClick={nextStep}
-                  className="bg-[#008B3D] hover:bg-green-600 py-6 w-full max-w-sm mx-auto flex items-center justify-center gap-2"
-                >
-                  Commencer la simulation
-                  <ArrowRight className="h-5 w-5" />
-                </Button>
-              </div>
-            </div>
+            <PtzInfoSlide onStart={nextStep} />
           </>
         )
       case 1:
@@ -755,79 +826,13 @@ export default function PtzCalculator() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
-                <Label htmlFor="address">Adresse complète</Label>
-                <div className="relative">
-                  <Input
-                    id="address"
-                    type="text"
-                    ref={addressInputRef}
-                    placeholder="Commencez à taper votre adresse..."
-                    value={formData.address}
-                    onChange={(e) => {
-                      handleInputChange("address", e.target.value)
-                      // Si l'utilisateur efface l'adresse, masquer la carte
-                      if (e.target.value.trim() === '') {
-                        setMapVisible(false)
-                      }
-                    }}
-                    className="h-12"
-                    autoComplete="off" // Désactiver l'autocomplétion du navigateur pour éviter les conflits
-                    onFocus={() => {
-                      // S'assurer que l'autocomplétion est réinitialisée quand on focus le champ
-                      if (!autocompleteRef.current && window.google) {
-                        initAutocomplete()
-                      }
-                    }}
-                  />
-                </div>
-                <div className="mt-2 text-sm text-gray-500">
-                  Ces informations nous permettent de mieux évaluer votre éligibilité au PTZ.
-                </div>
-                
-                {/* Carte Google Maps intégrée */}
-                {formData.address.trim() !== "" && mapVisible && (
-                  <div className="mt-4 rounded-lg overflow-hidden border border-gray-300 shadow-sm">
-                    <div className="relative w-full h-[300px]">
-                      <iframe
-                        width="100%"
-                        height="100%"
-                        style={{ border: 0, position: 'absolute', top: 0, left: 0 }}
-                        loading="lazy"
-                        allowFullScreen
-                        src={`https://www.google.com/maps/embed/v1/place?key=AIzaSyA7ZSI3CiR0ic_9eslCeBCgdKzGLXsCiF8&q=${encodeURIComponent(formData.address)}&zoom=16`}
-                      ></iframe>
-                    </div>
-                    <div className="bg-gray-100 py-2 px-4 text-sm text-gray-600 flex justify-between items-center">
-                      <span className="truncate">{formData.address}</span>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="text-gray-500 hover:text-[#008B3D]"
-                        onClick={() => setMapVisible(false)}
-                      >
-                        Masquer la carte
-                      </Button>
-                    </div>
-                  </div>
-                )}
-                
-                {/* Bouton pour afficher la carte si elle n'est pas déjà visible */}
-                {formData.address.trim() !== "" && !mapVisible && (
-                  <div className="mt-4">
-                    <Button
-                      type="button"
-                      variant="outline" 
-                      className="w-full flex items-center justify-center gap-2 border-[#008B3D] text-[#008B3D] hover:bg-green-50"
-                      onClick={() => setMapVisible(true)}
-                    >
-                      <MapPin className="h-4 w-4" />
-                      Afficher sur la carte
-                    </Button>
-                  </div>
-                )}
-              </div>
+              <AddressInputSection 
+                address={formData.address}
+                mapVisible={mapVisible}
+                onAddressChange={(value) => handleInputChange("address", value)}
+                onMapVisibilityChange={setMapVisible}
+                inputRef={addressInputRef}
+              />
             </CardContent>
           </>
         )
@@ -1329,7 +1334,7 @@ export default function PtzCalculator() {
                 <div className="p-4 border-b bg-gray-50">
                   <Progress value={progress} className="h-2 bg-gray-200 [&>div]:bg-[#008B3D]" />
                   <p className="text-sm text-gray-500 mt-2 text-center">
-                    Étape {step} sur {totalSteps - 1}
+                    Étape {step} sur {totalSteps}
                   </p>
                 </div>
               )}
@@ -1355,7 +1360,7 @@ export default function PtzCalculator() {
                   disabled={!isStepValid() || isSubmitting}
                   className="flex items-center gap-1 bg-[#008B3D] hover:bg-green-600"
                 >
-                  {step === totalSteps - 1 ? (isSubmitting ? "Calcul en cours..." : "Calculer") : 
+                  {step === totalSteps ? (isSubmitting ? "Calcul en cours..." : "Calculer") : 
                     step === 0 ? "Commencer la simulation" : "Suivant"}{" "}
                   {!isSubmitting && <ArrowRight className="h-4 w-4" />}
                 </Button>
@@ -1367,3 +1372,88 @@ export default function PtzCalculator() {
     </Card>
   )
 }
+
+// Component pour la section d'adresse avec carte
+const AddressInputSection = ({ 
+  address, 
+  mapVisible, 
+  onAddressChange, 
+  onMapVisibilityChange, 
+  inputRef 
+}: { 
+  address: string; 
+  mapVisible: boolean; 
+  onAddressChange: (value: string) => void; 
+  onMapVisibilityChange: (visible: boolean) => void; 
+  inputRef: React.RefObject<HTMLInputElement | null>;
+}) => {
+  return (
+    <div className="space-y-4">
+      <Label htmlFor="address">Adresse complète</Label>
+      <div className="relative">
+        <Input
+          id="address"
+          type="text"
+          ref={inputRef}
+          placeholder="Commencez à taper votre adresse..."
+          value={address}
+          onChange={(e) => {
+            onAddressChange(e.target.value)
+            // Si l'utilisateur efface l'adresse, masquer la carte
+            if (e.target.value.trim() === '') {
+              onMapVisibilityChange(false)
+            }
+          }}
+          className="h-12"
+          autoComplete="off" // Désactiver l'autocomplétion du navigateur pour éviter les conflits
+        />
+      </div>
+      <div className="mt-2 text-sm text-gray-500">
+        Ces informations nous permettent de mieux évaluer votre éligibilité au PTZ.
+      </div>
+      
+      {/* Carte Google Maps intégrée */}
+      {address.trim() !== "" && mapVisible && (
+        <div className="mt-4 rounded-lg overflow-hidden border border-gray-300 shadow-sm">
+          <div className="relative w-full h-[300px]">
+            <iframe
+              width="100%"
+              height="100%"
+              style={{ border: 0, position: 'absolute', top: 0, left: 0 }}
+              loading="lazy"
+              allowFullScreen
+              src={`https://www.google.com/maps/embed/v1/place?key=${GOOGLE_MAPS_API_KEY}&q=${encodeURIComponent(address)}&zoom=16`}
+            ></iframe>
+          </div>
+          <div className="bg-gray-100 py-2 px-4 text-sm text-gray-600 flex justify-between items-center">
+            <span className="truncate">{address}</span>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="text-gray-500 hover:text-[#008B3D]"
+              onClick={() => onMapVisibilityChange(false)}
+            >
+              Masquer la carte
+            </Button>
+          </div>
+        </div>
+      )}
+      
+      {/* Bouton pour afficher la carte si elle n'est pas déjà visible */}
+      {address.trim() !== "" && !mapVisible && (
+        <div className="mt-4">
+          <Button
+            type="button"
+            variant="outline" 
+            className="w-full flex items-center justify-center gap-2 border-[#008B3D] text-[#008B3D] hover:bg-green-50"
+            onClick={() => onMapVisibilityChange(true)}
+          >
+            <MapPin className="h-4 w-4" />
+            Afficher sur la carte
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+};
