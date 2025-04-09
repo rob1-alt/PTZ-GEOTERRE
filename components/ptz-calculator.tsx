@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
@@ -116,6 +116,41 @@ const COLLECTIVE_QUOTITIES = {
   4: 20,
 }
 
+// Déclaration pour l'API Google Maps et Places
+declare global {
+  interface Window {
+    google?: {
+      maps: {
+        places: {
+          Autocomplete: new (
+            input: HTMLInputElement,
+            options?: { 
+              types: string[];
+              componentRestrictions?: { country: string };
+              fields?: string[];
+            }
+          ) => google.maps.places.Autocomplete
+        }
+      }
+    }
+  }
+
+  namespace google.maps.places {
+    class Autocomplete {
+      addListener(event: string, callback: () => void): void;
+      getPlace(): {
+        formatted_address?: string;
+        geometry?: {
+          location?: {
+            lat(): number;
+            lng(): number;
+          }
+        }
+      };
+    }
+  }
+}
+
 export default function PtzCalculator() {
   const [step, setStep] = useState(1)
   const [formData, setFormData] = useState({
@@ -124,6 +159,7 @@ export default function PtzCalculator() {
     email: "",
     householdSize: "",
     zone: "",
+    address: "",
     income: "",
     housingType: "",
     projectCost: "",
@@ -138,9 +174,157 @@ export default function PtzCalculator() {
   const [showPartners, setShowPartners] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submissionError, setSubmissionError] = useState<string | null>(null)
+  const [mapVisible, setMapVisible] = useState(false)
+  const addressInputRef = useRef<HTMLInputElement>(null)
+  const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null)
 
-  const totalSteps = 6
+  const totalSteps = 7
   const progress = (step / totalSteps) * 100
+
+  // Charger l'état sauvegardé lors du chargement de la page
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      // Charger l'étape
+      const savedStep = localStorage.getItem('ptz-calculator-step')
+      if (savedStep) {
+        setStep(parseInt(savedStep))
+      }
+
+      // Charger les données du formulaire
+      const savedFormData = localStorage.getItem('ptz-calculator-form-data')
+      if (savedFormData) {
+        try {
+          setFormData(JSON.parse(savedFormData))
+        } catch (e) {
+          console.error("Erreur lors du chargement des données sauvegardées:", e)
+        }
+      }
+
+      // Charger le résultat
+      const savedResult = localStorage.getItem('ptz-calculator-result')
+      if (savedResult) {
+        try {
+          setResult(JSON.parse(savedResult))
+        } catch (e) {
+          console.error("Erreur lors du chargement du résultat sauvegardé:", e)
+        }
+      }
+
+      // Charger l'état d'affichage des partenaires
+      const savedShowPartners = localStorage.getItem('ptz-calculator-show-partners')
+      if (savedShowPartners) {
+        setShowPartners(savedShowPartners === 'true')
+      }
+    }
+  }, [])
+
+  // Sauvegarder l'état actuel lorsqu'il change
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('ptz-calculator-step', step.toString())
+      localStorage.setItem('ptz-calculator-form-data', JSON.stringify(formData))
+      localStorage.setItem('ptz-calculator-result', result ? JSON.stringify(result) : '')
+      localStorage.setItem('ptz-calculator-show-partners', showPartners.toString())
+    }
+  }, [step, formData, result, showPartners])
+
+  // Initialiser l'autocomplétion Google Places
+  useEffect(() => {
+    // Vérifiez si nous sommes dans le navigateur et à l'étape d'adresse
+    if (typeof window !== 'undefined' && step === 3 && addressInputRef.current) {
+      // Charger le script de l'API Google Maps si ce n'est pas déjà fait
+      if (!window.google || !window.google.maps) {
+        const script = document.createElement('script')
+        script.src = `https://maps.googleapis.com/maps/api/js?key=AIzaSyA7ZSI3CiR0ic_9eslCeBCgdKzGLXsCiF8&libraries=places`
+        script.async = true
+        script.defer = true
+        script.onload = initAutocomplete
+        document.head.appendChild(script)
+      } else {
+        initAutocomplete()
+      }
+    } else {
+      // Masquer la carte si on n'est plus à l'étape adresse
+      setMapVisible(false)
+    }
+  }, [step])
+
+  // Fonction pour initialiser l'autocomplétion
+  const initAutocomplete = () => {
+    if (addressInputRef.current && window.google) {
+      autocompleteRef.current = new window.google.maps.places.Autocomplete(
+        addressInputRef.current,
+        { 
+          types: ['address'],
+          componentRestrictions: { country: 'fr' }, // Restreindre aux adresses françaises
+          fields: ['formatted_address', 'geometry'], // Récupérer l'adresse formatée et la position
+        }
+      )
+
+      // Écouter les événements de sélection de lieu
+      autocompleteRef.current.addListener('place_changed', () => {
+        const place = autocompleteRef.current?.getPlace()
+        if (place && place.formatted_address) {
+          handleInputChange("address", place.formatted_address)
+          // Afficher automatiquement la carte lorsqu'une adresse est sélectionnée
+          setMapVisible(true)
+        }
+      })
+      
+      // Style CSS pour les suggestions d'autocomplétion
+      // Rendre les suggestions plus grandes et plus visibles
+      const style = document.createElement('style')
+      style.textContent = `
+        .pac-container {
+          border-radius: 0.5rem;
+          border: 1px solid #d1d5db;
+          box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+          font-family: sans-serif;
+          margin-top: 4px;
+          z-index: 9999 !important;
+          min-width: 300px;
+        }
+        .pac-item {
+          padding: 10px 15px;
+          font-size: 14px;
+          cursor: pointer;
+          border-top: 1px solid #e5e7eb;
+        }
+        .pac-item:first-child {
+          border-top: none;
+        }
+        .pac-item:hover {
+          background-color: #f3f9f1;
+        }
+        .pac-item-selected, .pac-item-selected:hover {
+          background-color: #e6f4e6;
+        }
+        .pac-icon {
+          margin-right: 10px;
+        }
+        .pac-item-query {
+          font-size: 15px;
+          font-weight: 500;
+          color: #111827;
+        }
+        .pac-matched {
+          font-weight: 700;
+          color: #10b981;
+        }
+        .pac-logo {
+          display: none !important;
+        }
+      `
+      document.head.appendChild(style)
+      
+      // Focus sur le champ d'adresse pour activer l'autocomplétion immédiatement
+      setTimeout(() => {
+        if (addressInputRef.current) {
+          addressInputRef.current.focus()
+        }
+      }, 100)
+    }
+  }
 
   const handleInputChange = (field: string, value: string) => {
     setFormData({ ...formData, [field]: value })
@@ -167,12 +351,14 @@ export default function PtzCalculator() {
       case 2:
         return formData.zone !== ""
       case 3:
-        return formData.income !== "" && !isNaN(Number(formData.income))
+        return formData.address.trim() !== ""
       case 4:
-        return formData.housingType !== ""
+        return formData.income !== "" && !isNaN(Number(formData.income))
       case 5:
-        return formData.projectCost !== "" && !isNaN(Number(formData.projectCost))
+        return formData.housingType !== ""
       case 6:
+        return formData.projectCost !== "" && !isNaN(Number(formData.projectCost))
+      case 7:
         return (
           formData.firstName.trim() !== "" &&
           formData.lastName.trim() !== "" &&
@@ -183,6 +369,29 @@ export default function PtzCalculator() {
         return false
     }
   }
+
+  // Fonction pour gérer l'appui sur la touche Entrée pour passer à l'étape suivante
+  const handleKeyDown = useCallback((event: KeyboardEvent) => {
+    if (event.key === 'Enter' && !result) {
+      // Éviter de déclencher l'événement si l'utilisateur est en train de saisir du texte
+      const activeElement = document.activeElement;
+      const isInputElement = activeElement instanceof HTMLInputElement && 
+        (activeElement.type === 'text' || activeElement.type === 'email' || activeElement.type === 'number');
+      
+      // Ne pas déclencher si on est sur un champ de saisie et que l'utilisateur appuie sur Entrée
+      if (!isInputElement && isStepValid()) {
+        nextStep();
+      }
+    }
+  }, [step, formData, result, isStepValid]);
+
+  // Ajouter l'écouteur d'événements clavier
+  useEffect(() => {
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [handleKeyDown]);
 
   const calculateEligibility = async () => {
     setIsSubmitting(true)
@@ -254,6 +463,7 @@ export default function PtzCalculator() {
         email: formData.email,
         householdSize: formData.householdSize,
         zone: formData.zone,
+        address: formData.address,
         income: formData.income,
         housingType: formData.housingType,
         projectCost: formData.projectCost,
@@ -283,6 +493,7 @@ export default function PtzCalculator() {
       email: "",
       householdSize: "",
       zone: "",
+      address: "",
       income: "",
       housingType: "",
       projectCost: "",
@@ -291,6 +502,14 @@ export default function PtzCalculator() {
     setShowPartners(false)
     setSubmissionError(null)
     setStep(1)
+    
+    // Effacer les données sauvegardées
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('ptz-calculator-step')
+      localStorage.removeItem('ptz-calculator-form-data')
+      localStorage.removeItem('ptz-calculator-result')
+      localStorage.removeItem('ptz-calculator-show-partners')
+    }
   }
 
   const viewPartners = () => {
@@ -303,11 +522,6 @@ export default function PtzCalculator() {
         return (
           <>
             <CardHeader className="space-y-1">
-              <div className="flex justify-center mb-2">
-                <div className="relative h-10 w-16">
-                  <Image src="/geoterre-logo.svg" alt="Geoterre Logo" fill className="object-contain" />
-                </div>
-              </div>
               <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-2">
                 <Users className="h-6 w-6 text-[#008B3D]" />
               </div>
@@ -381,6 +595,95 @@ export default function PtzCalculator() {
           <>
             <CardHeader className="space-y-1">
               <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-2">
+                <MapPin className="h-6 w-6 text-[#008B3D]" />
+              </div>
+              <CardTitle className="text-center text-xl">Où habitez-vous</CardTitle>
+              <CardDescription className="text-center">
+                Indiquez l'adresse où se situe votre projet immobilier
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <Label htmlFor="address">Adresse complète</Label>
+                <div className="relative">
+                  <Input
+                    id="address"
+                    type="text"
+                    ref={addressInputRef}
+                    placeholder="Commencez à taper votre adresse..."
+                    value={formData.address}
+                    onChange={(e) => {
+                      handleInputChange("address", e.target.value)
+                      // Si l'utilisateur efface l'adresse, masquer la carte
+                      if (e.target.value.trim() === '') {
+                        setMapVisible(false)
+                      }
+                    }}
+                    className="h-12"
+                    autoComplete="off" // Désactiver l'autocomplétion du navigateur pour éviter les conflits
+                    onFocus={() => {
+                      // S'assurer que l'autocomplétion est réinitialisée quand on focus le champ
+                      if (!autocompleteRef.current && window.google) {
+                        initAutocomplete()
+                      }
+                    }}
+                  />
+                </div>
+                <div className="mt-2 text-sm text-gray-500">
+                  Ces informations nous permettent de mieux évaluer votre éligibilité au PTZ.
+                </div>
+                
+                {/* Carte Google Maps intégrée */}
+                {formData.address.trim() !== "" && mapVisible && (
+                  <div className="mt-4 rounded-lg overflow-hidden border border-gray-300 shadow-sm">
+                    <div className="relative w-full h-[300px]">
+                      <iframe
+                        width="100%"
+                        height="100%"
+                        style={{ border: 0, position: 'absolute', top: 0, left: 0 }}
+                        loading="lazy"
+                        allowFullScreen
+                        src={`https://www.google.com/maps/embed/v1/place?key=AIzaSyA7ZSI3CiR0ic_9eslCeBCgdKzGLXsCiF8&q=${encodeURIComponent(formData.address)}&zoom=16`}
+                      ></iframe>
+                    </div>
+                    <div className="bg-gray-100 py-2 px-4 text-sm text-gray-600 flex justify-between items-center">
+                      <span className="truncate">{formData.address}</span>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="text-gray-500 hover:text-[#008B3D]"
+                        onClick={() => setMapVisible(false)}
+                      >
+                        Masquer la carte
+                      </Button>
+                    </div>
+                  </div>
+                )}
+                
+                {/* Bouton pour afficher la carte si elle n'est pas déjà visible */}
+                {formData.address.trim() !== "" && !mapVisible && (
+                  <div className="mt-4">
+                    <Button
+                      type="button"
+                      variant="outline" 
+                      className="w-full flex items-center justify-center gap-2 border-[#008B3D] text-[#008B3D] hover:bg-green-50"
+                      onClick={() => setMapVisible(true)}
+                    >
+                      <MapPin className="h-4 w-4" />
+                      Afficher sur la carte
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </>
+        )
+      case 4:
+        return (
+          <>
+            <CardHeader className="space-y-1">
+              <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-2">
                 <Euro className="h-6 w-6 text-[#008B3D]" />
               </div>
               <CardTitle className="text-center text-xl">Revenus du foyer</CardTitle>
@@ -409,7 +712,7 @@ export default function PtzCalculator() {
             </CardContent>
           </>
         )
-      case 4:
+      case 5:
         return (
           <>
             <CardHeader className="space-y-1">
@@ -432,9 +735,15 @@ export default function PtzCalculator() {
                   onClick={() => handleInputChange("housingType", "individual")}
                 >
                   <div className="flex flex-col items-center text-center">
-                    <Home
-                      className={`h-12 w-12 mb-3 ${formData.housingType === "individual" ? "text-[#008B3D]" : "text-gray-400"}`}
-                    />
+                    <div className="h-36 w-36 mb-3 overflow-hidden rounded-xl">
+                      <Image 
+                        src="/house.png" 
+                        alt="Maison individuelle" 
+                        width={400} 
+                        height={400}
+                        className="rounded-xl"
+                      />
+                    </div>
                     <h3 className="font-medium text-lg">Logement individuel</h3>
                     <p className="text-sm text-gray-500 mt-2">Maison individuelle ou logement indépendant</p>
                   </div>
@@ -448,9 +757,15 @@ export default function PtzCalculator() {
                   onClick={() => handleInputChange("housingType", "collective")}
                 >
                   <div className="flex flex-col items-center text-center">
-                    <Building
-                      className={`h-12 w-12 mb-3 ${formData.housingType === "collective" ? "text-[#008B3D]" : "text-gray-400"}`}
-                    />
+                    <div className="h-36 w-36 mb-3 overflow-hidden rounded-xl">
+                      <Image 
+                        src="/building.png" 
+                        alt="Immeuble collectif" 
+                        width={400} 
+                        height={400}
+                        className="rounded-xl"
+                      />
+                    </div>
                     <h3 className="font-medium text-lg">Logement collectif</h3>
                     <p className="text-sm text-gray-500 mt-2">Appartement dans un immeuble collectif</p>
                   </div>
@@ -459,7 +774,7 @@ export default function PtzCalculator() {
             </CardContent>
           </>
         )
-      case 5:
+      case 6:
         return (
           <>
             <CardHeader className="space-y-1">
@@ -492,7 +807,7 @@ export default function PtzCalculator() {
             </CardContent>
           </>
         )
-      case 6:
+      case 7:
         return (
           <>
             <CardHeader className="space-y-1">

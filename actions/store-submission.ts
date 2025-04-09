@@ -9,6 +9,7 @@ type SubmissionData = {
   email: string
   householdSize: string
   zone: string
+  address: string
   income: string
   housingType: string
   projectCost: string

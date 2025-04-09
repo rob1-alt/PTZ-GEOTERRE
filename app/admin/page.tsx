@@ -15,6 +15,7 @@ type Submission = {
   email: string;
   householdSize: string;
   zone: string;
+  address: string;
   income: string;
   housingType: string;
   projectCost: string;
@@ -192,6 +193,7 @@ export default function Admin() {
                     <TableHead>Email</TableHead>
                     <TableHead>Foyer</TableHead>
                     <TableHead>Zone</TableHead>
+                    <TableHead>Adresse</TableHead>
                     <TableHead>Revenu</TableHead>
                     <TableHead>Type</TableHead>
                     <TableHead>Coût</TableHead>
@@ -208,10 +210,51 @@ export default function Admin() {
                       <TableCell>{sub.email}</TableCell>
                       <TableCell>{sub.householdSize}</TableCell>
                       <TableCell>{sub.zone}</TableCell>
+                      <TableCell>
+                        {sub.address ? (
+                          <div className="flex items-center gap-1">
+                            <span className="truncate max-w-[150px]">{sub.address}</span>
+                            <a 
+                              href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(sub.address)}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-blue-500 hover:text-blue-700"
+                              title="Voir sur Google Maps"
+                            >
+                              <svg 
+                                xmlns="http://www.w3.org/2000/svg" 
+                                viewBox="0 0 24 24" 
+                                fill="none" 
+                                stroke="currentColor" 
+                                strokeWidth="2" 
+                                strokeLinecap="round" 
+                                strokeLinejoin="round" 
+                                className="w-4 h-4"
+                              >
+                                <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"></path>
+                                <path d="M15 3h6v6"></path>
+                                <path d="M10 14L21 3"></path>
+                              </svg>
+                            </a>
+                          </div>
+                        ) : (
+                          "-"
+                        )}
+                      </TableCell>
                       <TableCell>{Number(sub.income).toLocaleString()} €</TableCell>
                       <TableCell>{sub.housingType === 'individual' ? 'Individuel' : 'Collectif'}</TableCell>
                       <TableCell>{Number(sub.projectCost).toLocaleString()} €</TableCell>
-                      <TableCell>{sub.eligible ? 'Oui' : 'Non'}</TableCell>
+                      <TableCell>
+                        <span 
+                          className={`px-2 py-1 rounded-full text-xs font-medium ${
+                            sub.eligible 
+                              ? 'bg-green-100 text-green-800 border border-green-400' 
+                              : 'bg-red-100 text-red-800 border border-red-400'
+                          }`}
+                        >
+                          {sub.eligible ? 'Oui' : 'Non'}
+                        </span>
+                      </TableCell>
                       <TableCell>{sub.tranche || '-'}</TableCell>
                       <TableCell>{sub.ptzAmount ? `${Number(sub.ptzAmount).toLocaleString()} €` : '-'}</TableCell>
                     </TableRow>
