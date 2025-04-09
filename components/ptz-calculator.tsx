@@ -21,6 +21,11 @@ import {
   Percent,
   Calculator,
   User,
+  Info,
+  CalendarCheck,
+  FileText,
+  Clock,
+  Star,
 } from "lucide-react"
 import { BankPartners } from "./bank-partners"
 import Image from "next/image"
@@ -116,6 +121,38 @@ const COLLECTIVE_QUOTITIES = {
   4: 20,
 }
 
+// Plafonds de coût total de l'opération selon zone et nombre de personnes
+const COST_CEILINGS = {
+  A: {
+    1: 150000,
+    2: 225000,
+    3: 270000,
+    4: 315000,
+    5: 360000
+  },
+  B1: {
+    1: 135000,
+    2: 202500,
+    3: 243000,
+    4: 283500,
+    5: 324000
+  },
+  B2: {
+    1: 110000,
+    2: 165000,
+    3: 198000,
+    4: 231000,
+    5: 264000
+  },
+  C: {
+    1: 100000,
+    2: 150000,
+    3: 180000,
+    4: 210000,
+    5: 240000
+  }
+}
+
 // Déclaration pour l'API Google Maps et Places
 declare global {
   interface Window {
@@ -152,7 +189,7 @@ declare global {
 }
 
 export default function PtzCalculator() {
-  const [step, setStep] = useState(1)
+  const [step, setStep] = useState(0)
   const [formData, setFormData] = useState({
     firstName: "",
     lastName: "",
@@ -170,6 +207,8 @@ export default function PtzCalculator() {
     quotity?: number
     ptzAmount?: number
     reason?: string
+    costCeiling?: number
+    cappedProjectCost?: number
   } | null>(null)
   const [showPartners, setShowPartners] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -178,8 +217,8 @@ export default function PtzCalculator() {
   const addressInputRef = useRef<HTMLInputElement>(null)
   const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null)
 
-  const totalSteps = 7
-  const progress = (step / totalSteps) * 100
+  const totalSteps = 8
+  const progress = (step / (totalSteps - 1)) * 100
 
   // Charger l'état sauvegardé lors du chargement de la page
   useEffect(() => {
@@ -339,13 +378,15 @@ export default function PtzCalculator() {
   }
 
   const prevStep = () => {
-    if (step > 1) {
+    if (step > 0) {
       setStep(step - 1)
     }
   }
 
   const isStepValid = () => {
     switch (step) {
+      case 0:
+        return true
       case 1:
         return formData.householdSize !== ""
       case 2:
@@ -443,13 +484,22 @@ export default function PtzCalculator() {
             ? INDIVIDUAL_QUOTITIES[tranche as keyof typeof INDIVIDUAL_QUOTITIES]
             : COLLECTIVE_QUOTITIES[tranche as keyof typeof COLLECTIVE_QUOTITIES]
 
-        // Calculer le montant du PTZ
-        const ptzAmount = (projectCost * quotity) / 100
+        // Déterminer le plafond de coût en fonction de la zone et du nombre de personnes
+        const householdSizeForCeiling = Math.min(householdSize, 5) as keyof (typeof COST_CEILINGS)["A"];
+        const costCeiling = COST_CEILINGS[zone as keyof typeof COST_CEILINGS][householdSizeForCeiling];
+        
+        // Plafonner le coût du projet si nécessaire
+        const cappedProjectCost = Math.min(projectCost, costCeiling);
+        
+        // Calculer le montant du PTZ sur le coût plafonné
+        const ptzAmount = Math.round((cappedProjectCost * quotity) / 100);
 
         calculationResult = {
           eligible: true,
           tranche,
           quotity,
+          costCeiling,
+          cappedProjectCost,
           ptzAmount,
         }
       }
@@ -501,7 +551,7 @@ export default function PtzCalculator() {
     setResult(null)
     setShowPartners(false)
     setSubmissionError(null)
-    setStep(1)
+    setStep(0)
     
     // Effacer les données sauvegardées
     if (typeof window !== 'undefined') {
@@ -518,6 +568,108 @@ export default function PtzCalculator() {
 
   const renderStepContent = () => {
     switch (step) {
+      case 0:
+        return (
+          <>
+            <div className="relative overflow-hidden pb-6">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-green-50 rounded-full -mr-16 -mt-16 opacity-50"></div>
+              <div className="absolute bottom-0 left-0 w-24 h-24 bg-green-50 rounded-full -ml-12 -mb-12 opacity-50"></div>
+              
+              <div className="flex justify-center mb-6 pt-6">
+                <div className="relative h-12 w-20">
+                  <Image src="/geoterre-logo.svg" alt="Geoterre Logo" fill className="object-contain" />
+                </div>
+              </div>
+              
+              <div className="text-center px-4 mb-6">
+                <h1 className="text-2xl font-bold text-gray-800 mb-2">Nouvelles modalités PTZ 2025</h1>
+                <p className="text-gray-600">Découvrez les changements importants pour le Prêt à Taux Zéro</p>
+              </div>
+
+              <div className="space-y-6 px-6">
+                <div className="p-5 bg-green-50 rounded-lg border border-green-100">
+                  <div className="flex items-start mb-3">
+                    <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center mr-3 mt-1 flex-shrink-0">
+                      <CalendarCheck className="h-4 w-4 text-[#008B3D]" />
+                    </div>
+                    <div>
+                      <h4 className="font-semibold text-green-800 text-lg">Entrée en vigueur le 1er avril 2025</h4>
+                      <p className="text-sm text-green-700 mt-1">
+                        Le décret d'application pour la dérogation au PTZ a été publié, permettant son entrée
+                        en vigueur au 1er avril 2025.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="p-5 bg-white rounded-lg border border-gray-200">
+                  <div className="flex items-start mb-3">
+                    <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center mr-3 mt-1 flex-shrink-0">
+                      <FileText className="h-4 w-4 text-gray-700" />
+                    </div>
+                    <div>
+                      <h4 className="font-semibold text-gray-800">Rappel de la loi de finances 2024</h4>
+                      <p className="text-sm text-gray-700 mt-1 mb-2">
+                        La loi de finances pour 2024 a conditionné l'octroi d'un PTZ à une double
+                        condition de localisation du bien financé :
+                      </p>
+                      <ul className="list-disc list-inside text-sm text-gray-700 space-y-1 pl-2">
+                        <li>En zone tendue</li>
+                        <li>Au sein d'un bâtiment rassemblant du logement collectif</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="p-5 bg-amber-50 rounded-lg border border-amber-100">
+                  <div className="flex items-start mb-1">
+                    <div className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center mr-3 mt-1 flex-shrink-0">
+                      <Clock className="h-4 w-4 text-amber-800" />
+                    </div>
+                    <div>
+                      <h4 className="font-semibold text-amber-800">Dérogation 2025-2027</h4>
+                      <p className="text-sm text-amber-700 mt-1">
+                        Une dérogation a été prévue pour les offres de prêts délivrées entre le 1er
+                        avril 2025 et le 31 décembre 2027 pour suspendre cette double condition.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="p-5 bg-blue-50 rounded-lg border border-blue-100">
+                  <div className="flex items-start mb-1">
+                    <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center mr-3 mt-1 flex-shrink-0">
+                      <Star className="h-4 w-4 text-blue-800" />
+                    </div>
+                    <div>
+                      <h4 className="font-semibold text-blue-800">Ce qui change</h4>
+                      <p className="text-sm text-blue-700 mt-1 mb-2">
+                        Désormais le PTZ pourra financer des biens neufs :
+                      </p>
+                      <ul className="list-disc list-inside text-sm text-blue-700 space-y-1 pl-2">
+                        <li>Quelle que soit la zone d'implantation</li>
+                        <li>Qu'il s'agisse de logement individuel ou collectif</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="mt-8 text-center px-6">
+                <p className="text-sm text-gray-500 italic mb-4">
+                  Simulez dès maintenant votre éligibilité au PTZ avec ces nouvelles conditions.
+                </p>
+                <Button 
+                  onClick={nextStep}
+                  className="bg-[#008B3D] hover:bg-green-600 py-6 w-full max-w-sm mx-auto flex items-center justify-center gap-2"
+                >
+                  Commencer la simulation
+                  <ArrowRight className="h-5 w-5" />
+                </Button>
+              </div>
+            </div>
+          </>
+        )
       case 1:
         return (
           <>
@@ -941,6 +1093,36 @@ export default function PtzCalculator() {
                   </div>
                 </div>
 
+                <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="bg-white p-4 rounded-lg shadow-sm">
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center">
+                        <Calculator className="h-4 w-4 text-[#008B3D]" />
+                      </div>
+                      <span className="text-sm text-gray-500">Coût du projet</span>
+                    </div>
+                    {result.costCeiling && Number(formData.projectCost) > result.costCeiling ? (
+                      <>
+                        <p className="text-xl font-bold">{Number(formData.projectCost).toLocaleString()} €</p>
+                        <p className="text-sm text-amber-600 mt-1">Plafonné à {result.costCeiling.toLocaleString()} €</p>
+                      </>
+                    ) : (
+                      <p className="text-xl font-bold">{Number(formData.projectCost).toLocaleString()} €</p>
+                    )}
+                  </div>
+
+                  <div className="bg-white p-4 rounded-lg shadow-sm">
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center">
+                        <Home className="h-4 w-4 text-[#008B3D]" />
+                      </div>
+                      <span className="text-sm text-gray-500">Plafond de coût</span>
+                    </div>
+                    <p className="text-xl font-bold">{result.costCeiling?.toLocaleString()} €</p>
+                    <p className="text-xs text-gray-500 mt-1">pour {formData.householdSize} {Number(formData.householdSize) > 1 ? "personnes" : "personne"} en zone {formData.zone}</p>
+                  </div>
+                </div>
+
                 <div className="mt-6 text-center">
                   <p className="text-sm text-gray-600 mb-4">
                     Vous pouvez maintenant contacter l'un de nos partenaires bancaires pour finaliser votre demande de
@@ -956,8 +1138,8 @@ export default function PtzCalculator() {
                 <h4 className="font-medium mb-2 text-green-800">Informations importantes</h4>
                 <p className="text-sm text-green-700">
                   Le PTZ est un prêt sans intérêt, accordé sous conditions de ressources pour compléter un prêt
-                  principal et aider à l'acquisition de votre résidence principale. Cette simulation est donnée à titre
-                  indicatif.
+                  principal et aider à l'acquisition de votre résidence principale. Le montant du prêt est calculé 
+                  en fonction d'un coût plafonné qui varie selon la zone et la taille du foyer. Cette simulation est donnée à titre indicatif.
                 </p>
               </div>
               <div className="mt-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
@@ -966,6 +1148,7 @@ export default function PtzCalculator() {
                   <p>Le PTZ est soumis à des conditions strictes de ressources et de localisation :</p>
                   <ul className="list-disc list-inside pl-2 space-y-1">
                     <li>Les plafonds de ressources varient selon la zone géographique et la taille du foyer</li>
+                    <li>Le coût total de l'opération est plafonné selon la zone et le nombre de personnes</li>
                     <li>La quotité du prêt (pourcentage finançable) dépend de votre tranche de revenus</li>
                     <li>Pour le logement individuel, les quotités sont de 30%, 20%, 20% et 10% selon la tranche</li>
                     <li>Pour le logement collectif, les quotités sont de 50%, 40%, 40% et 20% selon la tranche</li>
@@ -1019,6 +1202,63 @@ export default function PtzCalculator() {
                 </div>
                 <p className="text-xs text-gray-500 mt-2">
                   Tableau simplifié. Pour les foyers de 5 personnes et plus, consultez un conseiller.
+                </p>
+              </div>
+              
+              <div className="mt-6">
+                <h4 className="font-medium mb-3">Plafonds de coût total de l'opération par zone</h4>
+                <div className="overflow-x-auto">
+                  <table className="min-w-full bg-white border border-gray-200 text-sm">
+                    <thead>
+                      <tr className="bg-gray-100">
+                        <th className="py-2 px-3 border-b text-left">Personnes</th>
+                        <th className="py-2 px-3 border-b text-right">Zone A</th>
+                        <th className="py-2 px-3 border-b text-right">Zone B1</th>
+                        <th className="py-2 px-3 border-b text-right">Zone B2</th>
+                        <th className="py-2 px-3 border-b text-right">Zone C</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td className="py-2 px-3 border-b">1</td>
+                        <td className="py-2 px-3 border-b text-right">150 000 €</td>
+                        <td className="py-2 px-3 border-b text-right">135 000 €</td>
+                        <td className="py-2 px-3 border-b text-right">110 000 €</td>
+                        <td className="py-2 px-3 border-b text-right">100 000 €</td>
+                      </tr>
+                      <tr className="bg-gray-50">
+                        <td className="py-2 px-3 border-b">2</td>
+                        <td className="py-2 px-3 border-b text-right">225 000 €</td>
+                        <td className="py-2 px-3 border-b text-right">202 500 €</td>
+                        <td className="py-2 px-3 border-b text-right">165 000 €</td>
+                        <td className="py-2 px-3 border-b text-right">150 000 €</td>
+                      </tr>
+                      <tr>
+                        <td className="py-2 px-3 border-b">3</td>
+                        <td className="py-2 px-3 border-b text-right">270 000 €</td>
+                        <td className="py-2 px-3 border-b text-right">243 000 €</td>
+                        <td className="py-2 px-3 border-b text-right">198 000 €</td>
+                        <td className="py-2 px-3 border-b text-right">180 000 €</td>
+                      </tr>
+                      <tr className="bg-gray-50">
+                        <td className="py-2 px-3 border-b">4</td>
+                        <td className="py-2 px-3 border-b text-right">315 000 €</td>
+                        <td className="py-2 px-3 border-b text-right">283 500 €</td>
+                        <td className="py-2 px-3 border-b text-right">231 000 €</td>
+                        <td className="py-2 px-3 border-b text-right">210 000 €</td>
+                      </tr>
+                      <tr>
+                        <td className="py-2 px-3 border-b">5 et plus</td>
+                        <td className="py-2 px-3 border-b text-right">360 000 €</td>
+                        <td className="py-2 px-3 border-b text-right">324 000 €</td>
+                        <td className="py-2 px-3 border-b text-right">264 000 €</td>
+                        <td className="py-2 px-3 border-b text-right">240 000 €</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+                <p className="text-xs text-gray-500 mt-2">
+                  Ce plafond est utilisé pour déterminer le coût maximum finançable par le PTZ.
                 </p>
               </div>
             </div>
@@ -1085,12 +1325,14 @@ export default function PtzCalculator() {
             renderResult()
           ) : (
             <>
-              <div className="p-4 border-b bg-gray-50">
-                <Progress value={progress} className="h-2 bg-gray-200 [&>div]:bg-[#008B3D]" />
-                <p className="text-sm text-gray-500 mt-2 text-center">
-                  Étape {step} sur {totalSteps}
-                </p>
-              </div>
+              {step > 0 && (
+                <div className="p-4 border-b bg-gray-50">
+                  <Progress value={progress} className="h-2 bg-gray-200 [&>div]:bg-[#008B3D]" />
+                  <p className="text-sm text-gray-500 mt-2 text-center">
+                    Étape {step} sur {totalSteps - 1}
+                  </p>
+                </div>
+              )}
               {renderStepContent()}
             </>
           )}
@@ -1103,17 +1345,22 @@ export default function PtzCalculator() {
           </Button>
         ) : (
           <>
-            <Button variant="outline" onClick={prevStep} disabled={step === 1} className="flex items-center gap-1">
-              <ArrowLeft className="h-4 w-4" /> Précédent
-            </Button>
-            <Button
-              onClick={nextStep}
-              disabled={!isStepValid() || isSubmitting}
-              className="flex items-center gap-1 bg-[#008B3D] hover:bg-green-600"
-            >
-              {step === totalSteps ? (isSubmitting ? "Calcul en cours..." : "Calculer") : "Suivant"}{" "}
-              {!isSubmitting && <ArrowRight className="h-4 w-4" />}
-            </Button>
+            {step > 0 && (
+              <>
+                <Button variant="outline" onClick={prevStep} disabled={step === 0} className="flex items-center gap-1">
+                  <ArrowLeft className="h-4 w-4" /> Précédent
+                </Button>
+                <Button
+                  onClick={nextStep}
+                  disabled={!isStepValid() || isSubmitting}
+                  className="flex items-center gap-1 bg-[#008B3D] hover:bg-green-600"
+                >
+                  {step === totalSteps - 1 ? (isSubmitting ? "Calcul en cours..." : "Calculer") : 
+                    step === 0 ? "Commencer la simulation" : "Suivant"}{" "}
+                  {!isSubmitting && <ArrowRight className="h-4 w-4" />}
+                </Button>
+              </>
+            )}
           </>
         )}
       </CardFooter>
