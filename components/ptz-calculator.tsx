@@ -193,6 +193,7 @@ type FormData = {
   firstName: string;
   lastName: string;
   email: string;
+  phone: string;
   householdSize: string;
   zone: string;
   address: string;
@@ -344,6 +345,7 @@ export default function PtzCalculator() {
     firstName: "",
     lastName: "",
     email: "",
+    phone: "",
     householdSize: "",
     zone: "",
     address: "",
@@ -366,8 +368,12 @@ export default function PtzCalculator() {
   const progress = ((step - 1) / (totalSteps - 1)) * 100
   
   // Memoized handlers
-  const handleInputChange = useCallback((field: string, value: string) => {
-    setFormData(prevData => ({ ...prevData, [field]: value }))
+  const handleInputChange = useCallback((field: keyof FormData, value: string) => {
+    setFormData(prev => {
+      const newData = { ...prev }
+      newData[field] = value || ""
+      return newData
+    })
   }, [])
   
   const nextStep = useCallback(() => {
@@ -393,6 +399,7 @@ export default function PtzCalculator() {
       firstName: "",
       lastName: "",
       email: "",
+      phone: "",
       householdSize: "",
       zone: "",
       address: "",
@@ -420,7 +427,7 @@ export default function PtzCalculator() {
   const isStepValid = useCallback(() => {
     switch (step) {
       case 0:
-        return true
+        return true // La slide d'information est toujours valide
       case 1:
         return formData.householdSize !== ""
       case 2:
@@ -432,13 +439,15 @@ export default function PtzCalculator() {
       case 5:
         return formData.housingType !== ""
       case 6:
-        return formData.projectCost !== "" && !isNaN(Number(formData.projectCost))
+        return formData.projectCost !== "" && !isNaN(Number(formData.projectCost)) && Number(formData.projectCost) > 0
       case 7:
+        // Validation plus souple des champs de contact
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
         return (
           formData.firstName.trim() !== "" &&
           formData.lastName.trim() !== "" &&
           formData.email.trim() !== "" &&
-          /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)
+          emailRegex.test(formData.email.trim())
         )
       default:
         return false
@@ -635,11 +644,27 @@ export default function PtzCalculator() {
     setSubmissionError(null)
 
     try {
-      const householdSize = Number.parseInt(formData.householdSize)
-      const income = Number.parseInt(formData.income)
-      const zone = formData.zone
-      const housingType = formData.housingType
-      const projectCost = Number.parseInt(formData.projectCost)
+      // Nettoyer les données avant de les envoyer
+      const cleanedFormData = {
+        ...formData,
+        firstName: formData.firstName.trim(),
+        lastName: formData.lastName.trim(),
+        email: formData.email.trim(),
+        phone: formData.phone.trim(),
+        address: formData.address.trim(),
+      }
+
+      // Vérifier que les champs obligatoires sont remplis
+      if (!cleanedFormData.firstName || !cleanedFormData.lastName || !cleanedFormData.email) {
+        throw new Error("Veuillez remplir tous les champs obligatoires")
+      }
+
+      // Calculer l'éligibilité
+      const income = Number(cleanedFormData.income)
+      const householdSize = Number(cleanedFormData.householdSize)
+      const projectCost = Number(cleanedFormData.projectCost)
+      const zone = cleanedFormData.zone as keyof typeof ELIGIBILITY_THRESHOLDS
+      const housingType = cleanedFormData.housingType
 
       // Vérifier si le revenu est inférieur au seuil d'éligibilité
       const maxIncome =
@@ -702,17 +727,9 @@ export default function PtzCalculator() {
         }
       }
 
-      // Stocker les données dans Google Sheets
+      // Stocker les données dans Google Sheets avec les résultats du calcul
       const storeResult = await storeSubmission({
-        firstName: formData.firstName,
-        lastName: formData.lastName,
-        email: formData.email,
-        householdSize: formData.householdSize,
-        zone: formData.zone,
-        address: formData.address,
-        income: formData.income,
-        housingType: formData.housingType,
-        projectCost: formData.projectCost,
+        ...cleanedFormData,
         ...calculationResult,
       })
 
@@ -980,34 +997,48 @@ export default function PtzCalculator() {
               <div className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="firstName">Prénom</Label>
+                    <Label htmlFor="firstName">Prénom *</Label>
                     <Input
                       id="firstName"
                       placeholder="Votre prénom"
                       value={formData.firstName}
                       onChange={(e) => handleInputChange("firstName", e.target.value)}
                       className="h-12"
+                      required
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="lastName">Nom</Label>
+                    <Label htmlFor="lastName">Nom *</Label>
                     <Input
                       id="lastName"
                       placeholder="Votre nom"
                       value={formData.lastName}
                       onChange={(e) => handleInputChange("lastName", e.target.value)}
                       className="h-12"
+                      required
                     />
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="email">Email</Label>
+                  <Label htmlFor="email">Email *</Label>
                   <Input
                     id="email"
                     type="email"
                     placeholder="votre.email@exemple.com"
                     value={formData.email}
                     onChange={(e) => handleInputChange("email", e.target.value)}
+                    className="h-12"
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="phone">Téléphone</Label>
+                  <Input
+                    id="phone"
+                    type="tel"
+                    placeholder="Votre numéro de téléphone"
+                    value={formData.phone}
+                    onChange={(e) => handleInputChange("phone", e.target.value)}
                     className="h-12"
                   />
                 </div>

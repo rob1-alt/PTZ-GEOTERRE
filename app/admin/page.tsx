@@ -13,6 +13,7 @@ type Submission = {
   firstName: string;
   lastName: string;
   email: string;
+  phone: string;
   householdSize: string;
   zone: string;
   address: string;
@@ -77,12 +78,23 @@ export default function Admin() {
   const fetchSubmissions = async () => {
     setLoading(true);
     try {
-      const response = await fetch('/api/sheets');
+      const response = await fetch('/api/sheets', {
+        cache: 'no-store',
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0'
+        }
+      });
       if (!response.ok) {
         throw new Error(`Erreur HTTP: ${response.status}`);
       }
       const data = await response.json();
-      setSubmissions(data.submissions || []);
+      console.log('Données reçues:', data); // Pour le débogage
+      if (!data.submissions || !Array.isArray(data.submissions)) {
+        throw new Error('Format de données invalide');
+      }
+      setSubmissions(data.submissions);
     } catch (err) {
       setError('Erreur lors de la récupération des données');
       console.error('Erreur:', err);
@@ -90,6 +102,15 @@ export default function Admin() {
       setLoading(false);
     }
   };
+
+  // Ajouter un intervalle de rafraîchissement
+  useEffect(() => {
+    if (isAuthenticated) {
+      fetchSubmissions();
+      const interval = setInterval(fetchSubmissions, 30000); // Rafraîchir toutes les 30 secondes
+      return () => clearInterval(interval);
+    }
+  }, [isAuthenticated]);
 
   const exportCSV = async () => {
     try {
@@ -191,15 +212,18 @@ export default function Admin() {
                     <TableHead>Date</TableHead>
                     <TableHead>Nom</TableHead>
                     <TableHead>Email</TableHead>
-                    <TableHead>Foyer</TableHead>
+                    <TableHead>Téléphone</TableHead>
                     <TableHead>Zone</TableHead>
                     <TableHead>Adresse</TableHead>
+                    <TableHead>Type de logement</TableHead>
+                    <TableHead>Taille du foyer</TableHead>
                     <TableHead>Revenu</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead>Coût</TableHead>
+                    <TableHead>Coût du projet</TableHead>
                     <TableHead>Éligible</TableHead>
                     <TableHead>Tranche</TableHead>
+                    <TableHead>Quotité</TableHead>
                     <TableHead>Montant PTZ</TableHead>
+                    <TableHead>Raison</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -208,7 +232,7 @@ export default function Admin() {
                       <TableCell>{sub.submissionDate}</TableCell>
                       <TableCell>{`${sub.firstName} ${sub.lastName}`}</TableCell>
                       <TableCell>{sub.email}</TableCell>
-                      <TableCell>{sub.householdSize}</TableCell>
+                      <TableCell>{sub.phone || "-"}</TableCell>
                       <TableCell>{sub.zone}</TableCell>
                       <TableCell>
                         {sub.address ? (
@@ -237,26 +261,17 @@ export default function Admin() {
                               </svg>
                             </a>
                           </div>
-                        ) : (
-                          "-"
-                        )}
+                        ) : "-"}
                       </TableCell>
-                      <TableCell>{Number(sub.income).toLocaleString()} €</TableCell>
-                      <TableCell>{sub.housingType === 'individual' ? 'Individuel' : 'Collectif'}</TableCell>
-                      <TableCell>{Number(sub.projectCost).toLocaleString()} €</TableCell>
-                      <TableCell>
-                        <span 
-                          className={`px-2 py-1 rounded-full text-xs font-medium ${
-                            sub.eligible 
-                              ? 'bg-green-100 text-green-800 border border-green-400' 
-                              : 'bg-red-100 text-red-800 border border-red-400'
-                          }`}
-                        >
-                          {sub.eligible ? 'Oui' : 'Non'}
-                        </span>
-                      </TableCell>
-                      <TableCell>{sub.tranche || '-'}</TableCell>
-                      <TableCell>{sub.ptzAmount ? `${Number(sub.ptzAmount).toLocaleString()} €` : '-'}</TableCell>
+                      <TableCell>{sub.housingType === "individual" ? "Individuel" : "Collectif"}</TableCell>
+                      <TableCell>{sub.householdSize}</TableCell>
+                      <TableCell>{sub.income} €</TableCell>
+                      <TableCell>{sub.projectCost} €</TableCell>
+                      <TableCell>{sub.eligible ? "Oui" : "Non"}</TableCell>
+                      <TableCell>{sub.tranche || "-"}</TableCell>
+                      <TableCell>{sub.quotity ? `${sub.quotity}%` : "-"}</TableCell>
+                      <TableCell>{sub.ptzAmount ? `${sub.ptzAmount} €` : "-"}</TableCell>
+                      <TableCell>{sub.reason || "-"}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
