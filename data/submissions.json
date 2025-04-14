@@ -1,20 +1,5 @@
 [
   {
-    "firstName": "John",
-    "lastName": "Franco",
-    "email": "tixey38087@suggets.com",
-    "householdSize": "2",
-    "zone": "B1",
-    "income": "30000",
-    "housingType": "individual",
-    "projectCost": "200000",
-    "eligible": true,
-    "tranche": 3,
-    "quotity": 20,
-    "ptzAmount": 40000,
-    "submissionDate": "09/04/2025 12:02:29"
-  },
-  {
     "firstName": "",
     "lastName": "",
     "email": "",

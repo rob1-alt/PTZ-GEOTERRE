@@ -73,4 +73,26 @@ export async function GET(request: NextRequest) {
       details: error instanceof Error ? error.message : 'Erreur inconnue'
     }, { status: 500 });
   }
+}
+
+export async function POST(request: NextRequest) {
+  // Vérifier l'authentification
+  if (!isAuthenticated(request)) {
+    return NextResponse.json({ error: 'Non autorisé' }, { status: 401 });
+  }
+
+  try {
+    const { submissions } = await request.json();
+    
+    // Écrire les nouvelles soumissions dans le fichier
+    fs.writeFileSync(DATA_FILE_PATH, JSON.stringify(submissions, null, 2));
+    
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error('Erreur lors de la sauvegarde des données:', error);
+    return NextResponse.json({ 
+      error: 'Erreur lors de la sauvegarde des données',
+      details: error instanceof Error ? error.message : 'Erreur inconnue'
+    }, { status: 500 });
+  }
 } 

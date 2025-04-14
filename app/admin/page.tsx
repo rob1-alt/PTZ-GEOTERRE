@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import Cookies from 'js-cookie';
+import { Checkbox } from "@/components/ui/checkbox";
 
 type Submission = {
   submissionDate: string;
@@ -29,6 +30,7 @@ type Submission = {
 
 export default function Admin() {
   const [submissions, setSubmissions] = useState<Submission[]>([]);
+  const [selectedSubmissions, setSelectedSubmissions] = useState<number[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -130,6 +132,42 @@ export default function Admin() {
     }
   };
 
+  const handleSelectSubmission = (index: number) => {
+    setSelectedSubmissions(prev => {
+      if (prev.includes(index)) {
+        return prev.filter(i => i !== index);
+      } else {
+        return [...prev, index];
+      }
+    });
+  };
+
+  const handleCancelSubmissions = async () => {
+    if (selectedSubmissions.length === 0) return;
+
+    try {
+      const updatedSubmissions = submissions.filter((_, index) => !selectedSubmissions.includes(index));
+      setSubmissions(updatedSubmissions);
+      setSelectedSubmissions([]);
+
+      // Sauvegarder les modifications
+      const response = await fetch('/api/sheets', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ submissions: updatedSubmissions }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Erreur lors de la sauvegarde des modifications');
+      }
+    } catch (error) {
+      console.error('Erreur:', error);
+      setError('Erreur lors de l\'annulation des soumissions');
+    }
+  };
+
   if (!isAuthenticated) {
     return (
       <div className="container mx-auto py-20 flex justify-center">
@@ -192,10 +230,18 @@ export default function Admin() {
           </Button>
         </CardHeader>
         <CardContent>
-          <div className="mb-6">
+          <div className="mb-6 flex gap-4">
             <Button onClick={exportCSV} className="bg-green-600 hover:bg-green-700">
               Exporter en CSV
             </Button>
+            {selectedSubmissions.length > 0 && (
+              <Button 
+                onClick={handleCancelSubmissions} 
+                className="bg-red-600 hover:bg-red-700"
+              >
+                Annuler les soumissions sélectionnées ({selectedSubmissions.length})
+              </Button>
+            )}
           </div>
 
           {loading ? (
@@ -209,6 +255,18 @@ export default function Admin() {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-[50px]">
+                      <Checkbox
+                        checked={selectedSubmissions.length === submissions.length}
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            setSelectedSubmissions(submissions.map((_, index) => index));
+                          } else {
+                            setSelectedSubmissions([]);
+                          }
+                        }}
+                      />
+                    </TableHead>
                     <TableHead>Date</TableHead>
                     <TableHead>Nom</TableHead>
                     <TableHead>Email</TableHead>
@@ -229,6 +287,12 @@ export default function Admin() {
                 <TableBody>
                   {submissions.map((sub, index) => (
                     <TableRow key={index}>
+                      <TableCell>
+                        <Checkbox
+                          checked={selectedSubmissions.includes(index)}
+                          onCheckedChange={() => handleSelectSubmission(index)}
+                        />
+                      </TableCell>
                       <TableCell>{sub.submissionDate}</TableCell>
                       <TableCell>{`${sub.firstName} ${sub.lastName}`}</TableCell>
                       <TableCell>{sub.email}</TableCell>
