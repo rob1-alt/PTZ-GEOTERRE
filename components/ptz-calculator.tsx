@@ -200,6 +200,8 @@ type FormData = {
   income: string;
   housingType: string;
   projectCost: string;
+  monthlyIncome?: string;
+  notOwnerForTwoYears: boolean;
 };
 
 type ResultType = {
@@ -247,25 +249,6 @@ const PtzInfoSlide = ({ onStart }: { onStart: () => void }) => {
                 Le décret d'application pour la dérogation au PTZ a été publié, permettant son entrée
                 en vigueur au 1er avril 2025.
               </p>
-            </div>
-          </div>
-        </div>
-        
-        <div className="p-5 bg-white rounded-lg border border-gray-200">
-          <div className="flex items-start mb-3">
-            <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center mr-3 mt-1 flex-shrink-0">
-              <FileText className="h-4 w-4 text-gray-700" />
-            </div>
-            <div>
-              <h4 className="font-semibold text-gray-800">Rappel de la loi de finances 2024</h4>
-              <p className="text-sm text-gray-700 mt-1 mb-2">
-                La loi de finances pour 2024 a conditionné l'octroi d'un PTZ à une double
-                condition de localisation du bien financé :
-              </p>
-              <ul className="list-disc list-inside text-sm text-gray-700 space-y-1 pl-2">
-                <li>En zone tendue</li>
-                <li>Au sein d'un bâtiment rassemblant du logement collectif</li>
-              </ul>
             </div>
           </div>
         </div>
@@ -352,6 +335,7 @@ export default function PtzCalculator() {
     income: "",
     housingType: "",
     projectCost: "",
+    notOwnerForTwoYears: false,
   })
   const [result, setResult] = useState<ResultType | null>(null)
   const [showPartners, setShowPartners] = useState(false)
@@ -364,16 +348,18 @@ export default function PtzCalculator() {
   const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null)
   
   // Constants
-  const totalSteps = 7
+  const totalSteps = 8
   const progress = ((step - 1) / (totalSteps - 1)) * 100
   
   // Memoized handlers
-  const handleInputChange = useCallback((field: keyof FormData, value: string) => {
-    setFormData(prev => {
-      const newData = { ...prev }
-      newData[field] = value || ""
-      return newData
-    })
+  const handleInputChange = useCallback(<K extends keyof FormData>(
+    field: K,
+    value: FormData[K]
+  ) => {
+    setFormData(prev => ({
+      ...prev,
+      [field]: value
+    }))
   }, [])
   
   const nextStep = useCallback(() => {
@@ -406,6 +392,7 @@ export default function PtzCalculator() {
       income: "",
       housingType: "",
       projectCost: "",
+      notOwnerForTwoYears: false,
     })
     setResult(null)
     setShowPartners(false)
@@ -427,21 +414,22 @@ export default function PtzCalculator() {
   const isStepValid = useCallback(() => {
     switch (step) {
       case 0:
-        return true // La slide d'information est toujours valide
+        return true
       case 1:
         return formData.householdSize !== ""
       case 2:
-        return formData.zone !== ""
+        return formData.notOwnerForTwoYears !== undefined
       case 3:
-        return formData.address.trim() !== ""
+        return formData.zone !== ""
       case 4:
-        return formData.income !== "" && !isNaN(Number(formData.income))
+        return formData.address.trim() !== ""
       case 5:
-        return formData.housingType !== ""
+        return formData.income !== "" && !isNaN(Number(formData.income))
       case 6:
-        return formData.projectCost !== "" && !isNaN(Number(formData.projectCost)) && Number(formData.projectCost) > 0
+        return formData.housingType !== ""
       case 7:
-        // Validation plus souple des champs de contact
+        return formData.projectCost !== "" && !isNaN(Number(formData.projectCost)) && Number(formData.projectCost) > 0
+      case 8:
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
         return (
           formData.firstName.trim() !== "" &&
@@ -655,8 +643,17 @@ export default function PtzCalculator() {
       }
 
       // Vérifier que les champs obligatoires sont remplis
-      if (!cleanedFormData.firstName || !cleanedFormData.lastName || !cleanedFormData.email) {
+      if (!cleanedFormData.firstName || !cleanedFormData.lastName || !cleanedFormData.email || 
+          !cleanedFormData.income || !cleanedFormData.householdSize || !cleanedFormData.zone || 
+          !cleanedFormData.housingType || !cleanedFormData.projectCost || 
+          cleanedFormData.notOwnerForTwoYears === undefined) {
         throw new Error("Veuillez remplir tous les champs obligatoires")
+      }
+
+      // Vérifier que l'email est valide
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+      if (!emailRegex.test(cleanedFormData.email)) {
+        throw new Error("Veuillez entrer une adresse email valide")
       }
 
       // Calculer l'éligibilité
@@ -730,7 +727,12 @@ export default function PtzCalculator() {
       // Stocker les données dans Google Sheets avec les résultats du calcul
       const storeResult = await storeSubmission({
         ...cleanedFormData,
-        ...calculationResult,
+        eligible: calculationResult.eligible,
+        tranche: calculationResult.tranche,
+        quotity: calculationResult.quotity,
+        ptzAmount: calculationResult.ptzAmount,
+        reason: calculationResult.reason,
+        notOwnerForTwoYears: cleanedFormData.notOwnerForTwoYears
       })
 
       if (!storeResult.success) {
@@ -798,6 +800,79 @@ export default function PtzCalculator() {
           <>
             <CardHeader className="space-y-1">
               <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-2">
+                <Home className="h-6 w-6 text-[#008B3D]" />
+              </div>
+              <CardTitle className="text-center text-xl">Situation actuelle</CardTitle>
+              <CardDescription className="text-center">
+                Confirmez votre situation de propriété
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-6">
+                <div 
+                  className={`p-6 border-2 rounded-lg cursor-pointer transition-all ${
+                    formData.notOwnerForTwoYears 
+                    ? "border-[#008B3D] bg-green-50" 
+                    : "border-gray-200 hover:border-green-300"
+                  }`}
+                  onClick={() => handleInputChange("notOwnerForTwoYears", !formData.notOwnerForTwoYears)}
+                >
+                  <div className="flex items-start space-x-4">
+                    <div className="flex-shrink-0 mt-1">
+                      <div className={`w-6 h-6 rounded border-2 flex items-center justify-center ${
+                        formData.notOwnerForTwoYears 
+                        ? "bg-[#008B3D] border-[#008B3D]" 
+                        : "border-gray-300"
+                      }`}>
+                        {formData.notOwnerForTwoYears && (
+                          <CheckCircle className="h-4 w-4 text-white" />
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex-grow">
+                      <h3 className="font-medium text-lg mb-2">
+                        Je certifie avoir été propriétaire de ma résidence principale depuis au moins 2 ans
+                      </h3>
+                      <p className="text-gray-600 text-sm">
+                        Cette condition est obligatoire pour être éligible au PTZ
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="flex justify-center">
+                  <div className="h-48 w-48 relative overflow-hidden rounded-xl">
+                    <Image 
+                      src="/landlord.png" 
+                      alt="Propriété résidence principale" 
+                      width={400} 
+                      height={400}
+                      className="object-contain"
+                    />
+                  </div>
+                </div>
+
+                <div className="p-4 bg-amber-50 rounded-lg border border-amber-100">
+                  <div className="flex items-start space-x-3">
+                    <Info className="h-5 w-5 text-amber-600 mt-0.5" />
+                    <div className="text-sm text-amber-800">
+                      <p className="font-medium mb-1">Information importante</p>
+                      <p>
+                        Pour bénéficier du PTZ, vous ne devez pas avoir été propriétaire de votre résidence 
+                        principale au cours des deux dernières années précédant votre demande.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </>
+        );
+      case 3:
+        return (
+          <>
+            <CardHeader className="space-y-1">
+              <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-2">
                 <MapPin className="h-6 w-6 text-[#008B3D]" />
               </div>
               <CardTitle className="text-center text-xl">Zone géographique</CardTitle>
@@ -830,7 +905,7 @@ export default function PtzCalculator() {
             </CardContent>
           </>
         )
-      case 3:
+      case 4:
         return (
           <>
             <CardHeader className="space-y-1">
@@ -853,7 +928,7 @@ export default function PtzCalculator() {
             </CardContent>
           </>
         )
-      case 4:
+      case 5:
         return (
           <>
             <CardHeader className="space-y-1">
@@ -862,31 +937,48 @@ export default function PtzCalculator() {
               </div>
               <CardTitle className="text-center text-xl">Revenus du foyer</CardTitle>
               <CardDescription className="text-center">
-                Indiquez le revenu fiscal de référence de votre foyer
+                Indiquez le revenu mensuel net de votre foyer
               </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                <Label htmlFor="income">Revenu fiscal de référence (€)</Label>
+                <Label htmlFor="monthlyIncome">Revenu mensuel net (€)</Label>
                 <div className="relative">
                   <Input
-                    id="income"
+                    id="monthlyIncome"
                     type="number"
-                    placeholder="Ex: 35000"
-                    value={formData.income}
-                    onChange={(e) => handleInputChange("income", e.target.value)}
+                    placeholder="Ex: 2500"
+                    value={formData.monthlyIncome || ""}
+                    onChange={(e) => {
+                      const monthlyIncome = e.target.value;
+                      // Calculer le revenu fiscal de référence (mensuel x 12)
+                      const annualIncome = monthlyIncome ? (Number(monthlyIncome) * 12).toString() : "";
+                      handleInputChange("income", annualIncome);
+                      handleInputChange("monthlyIncome", monthlyIncome);
+                    }}
                     className="h-12 pl-10"
                   />
                   <Euro className="absolute left-3 top-3.5 h-5 w-5 text-gray-400" />
                 </div>
                 <div className="mt-2 text-sm text-gray-500">
-                  Vous trouverez cette information sur votre dernier avis d'imposition.
+                  Le revenu fiscal de référence sera calculé automatiquement (mensuel x 12).
+                  {formData.monthlyIncome && (
+                    <div className="mt-4 p-3 bg-green-50 rounded-lg">
+                      <p className="font-medium text-green-800">Revenu fiscal de référence calculé :</p>
+                      <p className="text-lg font-bold mt-1">
+                        {Number(formData.income).toLocaleString()} €
+                      </p>
+                      <p className="text-xs text-green-700 mt-1">
+                        (Revenu mensuel x 12)
+                      </p>
+                    </div>
+                  )}
                 </div>
               </div>
             </CardContent>
           </>
         )
-      case 5:
+      case 6:
         return (
           <>
             <CardHeader className="space-y-1">
@@ -948,7 +1040,7 @@ export default function PtzCalculator() {
             </CardContent>
           </>
         )
-      case 6:
+      case 7:
         return (
           <>
             <CardHeader className="space-y-1">
@@ -981,7 +1073,7 @@ export default function PtzCalculator() {
             </CardContent>
           </>
         )
-      case 7:
+      case 8:
         return (
           <>
             <CardHeader className="space-y-1">

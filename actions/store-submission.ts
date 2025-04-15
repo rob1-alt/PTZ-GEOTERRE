@@ -19,6 +19,7 @@ type SubmissionData = {
   quotity?: number
   ptzAmount?: number
   reason?: string
+  notOwnerForTwoYears: boolean
 }
 
 // Chemin vers le fichier JSON local pour stocker les données

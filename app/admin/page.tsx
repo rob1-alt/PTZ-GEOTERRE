@@ -26,6 +26,7 @@ type Submission = {
   quotity?: number;
   ptzAmount?: number;
   reason?: string;
+  notOwnerForTwoYears: boolean;
 };
 
 export default function Admin() {
@@ -281,6 +282,7 @@ export default function Admin() {
                     <TableHead>Tranche</TableHead>
                     <TableHead>Quotité</TableHead>
                     <TableHead>Montant PTZ</TableHead>
+                    <TableHead>Non propriétaire</TableHead>
                     <TableHead>Raison</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -335,6 +337,7 @@ export default function Admin() {
                       <TableCell>{sub.tranche || "-"}</TableCell>
                       <TableCell>{sub.quotity ? `${sub.quotity}%` : "-"}</TableCell>
                       <TableCell>{sub.ptzAmount ? `${sub.ptzAmount} €` : "-"}</TableCell>
+                      <TableCell>{sub.notOwnerForTwoYears ? "Oui" : "Non"}</TableCell>
                       <TableCell>{sub.reason || "-"}</TableCell>
                     </TableRow>
                   ))}
