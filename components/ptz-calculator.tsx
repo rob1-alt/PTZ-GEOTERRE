@@ -855,10 +855,10 @@ export default function PtzCalculator() {
                       </div>
                       <div className="flex-grow">
                         <h3 className="font-medium text-lg mb-2">
-                          Je certifie ne pas avoir été propriétaire de ma résidence principale depuis au moins 2 ans
+                          Je n’ai pas été propriétaire de ma résidence principale au cours des 2 dernières années
                         </h3>
                         <p className="text-gray-600 text-sm">
-                          Dans ce cas vous ne serez donc pas éligible au PTZ
+                        Je peux être éligible au Prêt à Taux Zéro (PTZ)
                         </p>
                       </div>
                     </div>
@@ -886,10 +886,10 @@ export default function PtzCalculator() {
                       </div>
                       <div className="flex-grow">
                         <h3 className="font-medium text-lg mb-2">
-                          Je certifie avoir été propriétaire de ma résidence principale depuis au moins 2 ans
+                          J’ai été propriétaire de ma résidence principale au cours des 2 dernières années
                         </h3>
                         <p className="text-gray-600 text-sm">
-                          Cette condition est obligatoire pour être éligible au PT
+                        Je ne suis pas éligible au Prêt à Taux Zéro (PTZ)
                         </p>
                       </div>
                     </div>

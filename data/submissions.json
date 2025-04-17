@@ -130,5 +130,31 @@
     "quotity": 20,
     "ptzAmount": 40000,
     "submissionDate": "16/04/2025 09:47:30"
+  },
+  {
+    "firstName": "Robin",
+    "lastName": "Pautigny",
+    "email": "robin.pautigny@hetic.net",
+    "phone": "0652763041",
+    "householdSize": "5",
+    "zone": "B2",
+    "address": "7 rue des sesçois",
+    "income": "360000",
+    "housingType": "individual",
+    "projectCost": "200000",
+    "notOwnerForTwoYears": false,
+    "selectedCommune": {
+      "codeDepartement": "27",
+      "departement": "Eure",
+      "commune": "Bois-le-Roi",
+      "region": "Haute-Normandie",
+      "zonePTZ2014": "B2",
+      "zonePTZ2024": "",
+      "population": 1068
+    },
+    "monthlyIncome": "30000",
+    "eligible": false,
+    "reason": "Vos revenus (360,000 €) dépassent le plafond d'éligibilité au PTZ (75,600 €) pour votre zone et la taille de votre foyer.",
+    "submissionDate": "17/04/2025 10:36:22"
   }
 ]
