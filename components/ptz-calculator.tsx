@@ -30,6 +30,8 @@ import {
 import { BankPartners } from "./bank-partners"
 import Image from "next/image"
 import { storeSubmission } from "@/actions/store-submission"
+import { CommuneSearch } from "@/components/commune-search"
+import { type Commune } from "@/lib/communes"
 
 // Mettre à jour les constantes ELIGIBILITY_THRESHOLDS et INCOME_TRANCHES pour qu'elles correspondent exactement aux tableaux du document
 
@@ -202,6 +204,7 @@ type FormData = {
   projectCost: string;
   monthlyIncome?: string;
   notOwnerForTwoYears: boolean;
+  selectedCommune?: Commune;
 };
 
 type ResultType = {
@@ -244,10 +247,10 @@ const PtzInfoSlide = ({ onStart }: { onStart: () => void }) => {
               <CalendarCheck className="h-4 w-4 text-[#008B3D]" />
             </div>
             <div>
-              <h4 className="font-semibold text-green-800 text-lg">Entrée en vigueur le 1er avril 2025</h4>
+              <h4 className="font-semibold text-green-800 text-lg">Entrée en vigueur le 1er Avril 2025</h4>
               <p className="text-sm text-green-700 mt-1">
-                Le décret d'application pour la dérogation au PTZ a été publié, permettant son entrée
-                en vigueur au 1er avril 2025.
+                Un nouveau décret vient d'être publié avec de nouvelles conditions pour bénéficier du Prêt à
+                Taux Zéro (PTZ) depuis le 1er avril 2025 jusqu'au 31 décembre 2027.
               </p>
             </div>
           </div>
@@ -261,9 +264,13 @@ const PtzInfoSlide = ({ onStart }: { onStart: () => void }) => {
             <div>
               <h4 className="font-semibold text-amber-800">Dérogation 2025-2027</h4>
               <p className="text-sm text-amber-700 mt-1">
-                Une dérogation a été prévue pour les offres de prêts délivrées entre le 1er
-                avril 2025 et le 31 décembre 2027 pour suspendre cette double condition.
+                Avec ces nouvelles conditions, il est désormais possible de bénéficier du PTZ pour acheter
+                un logement neuf :
               </p>
+              <ul className="list-disc list-inside text-sm text-amber-700 mt-2 pl-2">
+                <li>Peu importe la zone géographique</li>
+                <li>Qu'il s'agisse d'une maison ou d'un appartement</li>
+              </ul>
             </div>
           </div>
         </div>
@@ -274,13 +281,14 @@ const PtzInfoSlide = ({ onStart }: { onStart: () => void }) => {
               <Star className="h-4 w-4 text-blue-800" />
             </div>
             <div>
-              <h4 className="font-semibold text-blue-800">Ce qui change</h4>
+              <h4 className="font-semibold text-blue-800">Conditions pour bénéficier du PTZ</h4>
               <p className="text-sm text-blue-700 mt-1 mb-2">
-                Désormais le PTZ pourra financer des biens neufs :
+                Pour être éligible au PTZ :
               </p>
               <ul className="list-disc list-inside text-sm text-blue-700 space-y-1 pl-2">
-                <li>Quelle que soit la zone d'implantation</li>
-                <li>Qu'il s'agisse de logement individuel ou collectif</li>
+                <li>Résidence principale : Le logement acheté doit devenir votre résidence principale.</li>
+                <li>Primo-accédant : vous ne devez pas avoir été propriétaire de votre résidence principale au cours des deux dernières années</li>
+                <li>Conditions de ressources : vos revenus ne doivent pas dépasser certains plafonds, qui varient en fonction de la composition de votre foyer et de la commune concernée par votre projet</li>
               </ul>
             </div>
           </div>
@@ -336,6 +344,7 @@ export default function PtzCalculator() {
     housingType: "",
     projectCost: "",
     notOwnerForTwoYears: false,
+    selectedCommune: undefined,
   })
   const [result, setResult] = useState<ResultType | null>(null)
   const [showPartners, setShowPartners] = useState(false)
@@ -393,6 +402,7 @@ export default function PtzCalculator() {
       housingType: "",
       projectCost: "",
       notOwnerForTwoYears: false,
+      selectedCommune: undefined,
     })
     setResult(null)
     setShowPartners(false)
@@ -645,8 +655,7 @@ export default function PtzCalculator() {
       // Vérifier que les champs obligatoires sont remplis
       if (!cleanedFormData.firstName || !cleanedFormData.lastName || !cleanedFormData.email || 
           !cleanedFormData.income || !cleanedFormData.householdSize || !cleanedFormData.zone || 
-          !cleanedFormData.housingType || !cleanedFormData.projectCost || 
-          cleanedFormData.notOwnerForTwoYears === undefined) {
+          !cleanedFormData.housingType || !cleanedFormData.projectCost) {
         throw new Error("Veuillez remplir tous les champs obligatoires")
       }
 
@@ -752,6 +761,14 @@ export default function PtzCalculator() {
     }
   }, [formData]);
 
+  const handleCommuneSelect = useCallback((commune: Commune) => {
+    setFormData(prev => ({
+      ...prev,
+      selectedCommune: commune,
+      zone: commune.zonePTZ2024 || commune.zonePTZ2014
+    }))
+  }, [])
+
   const renderStepContent = () => {
     switch (step) {
       case 0:
@@ -809,33 +826,72 @@ export default function PtzCalculator() {
             </CardHeader>
             <CardContent>
               <div className="space-y-6">
-                <div 
-                  className={`p-6 border-2 rounded-lg cursor-pointer transition-all ${
-                    formData.notOwnerForTwoYears 
-                    ? "border-[#008B3D] bg-green-50" 
-                    : "border-gray-200 hover:border-green-300"
-                  }`}
-                  onClick={() => handleInputChange("notOwnerForTwoYears", !formData.notOwnerForTwoYears)}
-                >
-                  <div className="flex items-start space-x-4">
-                    <div className="flex-shrink-0 mt-1">
-                      <div className={`w-6 h-6 rounded border-2 flex items-center justify-center ${
-                        formData.notOwnerForTwoYears 
-                        ? "bg-[#008B3D] border-[#008B3D]" 
-                        : "border-gray-300"
-                      }`}>
-                        {formData.notOwnerForTwoYears && (
-                          <CheckCircle className="h-4 w-4 text-white" />
-                        )}
+                <div className="p-4 bg-amber-50 rounded-lg border border-amber-100">
+                  <p className="text-amber-800">
+                    Pour bénéficier du PTZ, vous ne devez pas avoir été propriétaire de votre résidence principale au cours des deux dernières années précédant votre demande.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 gap-4">
+                  <div 
+                    className={`p-6 border-2 rounded-lg cursor-pointer transition-all ${
+                      !formData.notOwnerForTwoYears 
+                      ? "border-[#008B3D] bg-green-50" 
+                      : "border-gray-200 hover:border-green-300"
+                    }`}
+                    onClick={() => handleInputChange("notOwnerForTwoYears", false)}
+                  >
+                    <div className="flex items-start space-x-4">
+                      <div className="flex-shrink-0 mt-1">
+                        <div className={`w-6 h-6 rounded border-2 flex items-center justify-center ${
+                          !formData.notOwnerForTwoYears 
+                          ? "bg-[#008B3D] border-[#008B3D]" 
+                          : "border-gray-300"
+                        }`}>
+                          {!formData.notOwnerForTwoYears && (
+                            <CheckCircle className="h-4 w-4 text-white" />
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex-grow">
+                        <h3 className="font-medium text-lg mb-2">
+                          Je certifie ne pas avoir été propriétaire de ma résidence principale depuis au moins 2 ans
+                        </h3>
+                        <p className="text-gray-600 text-sm">
+                          Dans ce cas vous ne serez donc pas éligible au PTZ
+                        </p>
                       </div>
                     </div>
-                    <div className="flex-grow">
-                      <h3 className="font-medium text-lg mb-2">
-                        Je certifie avoir été propriétaire de ma résidence principale depuis au moins 2 ans
-                      </h3>
-                      <p className="text-gray-600 text-sm">
-                        Cette condition est obligatoire pour être éligible au PTZ
-                      </p>
+                  </div>
+
+                  <div 
+                    className={`p-6 border-2 rounded-lg cursor-pointer transition-all ${
+                      formData.notOwnerForTwoYears 
+                      ? "border-[#008B3D] bg-green-50" 
+                      : "border-gray-200 hover:border-green-300"
+                    }`}
+                    onClick={() => handleInputChange("notOwnerForTwoYears", true)}
+                  >
+                    <div className="flex items-start space-x-4">
+                      <div className="flex-shrink-0 mt-1">
+                        <div className={`w-6 h-6 rounded border-2 flex items-center justify-center ${
+                          formData.notOwnerForTwoYears 
+                          ? "bg-[#008B3D] border-[#008B3D]" 
+                          : "border-gray-300"
+                        }`}>
+                          {formData.notOwnerForTwoYears && (
+                            <CheckCircle className="h-4 w-4 text-white" />
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex-grow">
+                        <h3 className="font-medium text-lg mb-2">
+                          Je certifie avoir été propriétaire de ma résidence principale depuis au moins 2 ans
+                        </h3>
+                        <p className="text-gray-600 text-sm">
+                          Cette condition est obligatoire pour être éligible au PT
+                        </p>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -851,19 +907,6 @@ export default function PtzCalculator() {
                     />
                   </div>
                 </div>
-
-                <div className="p-4 bg-amber-50 rounded-lg border border-amber-100">
-                  <div className="flex items-start space-x-3">
-                    <Info className="h-5 w-5 text-amber-600 mt-0.5" />
-                    <div className="text-sm text-amber-800">
-                      <p className="font-medium mb-1">Information importante</p>
-                      <p>
-                        Pour bénéficier du PTZ, vous ne devez pas avoir été propriétaire de votre résidence 
-                        principale au cours des deux dernières années précédant votre demande.
-                      </p>
-                    </div>
-                  </div>
-                </div>
               </div>
             </CardContent>
           </>
@@ -877,30 +920,23 @@ export default function PtzCalculator() {
               </div>
               <CardTitle className="text-center text-xl">Zone géographique</CardTitle>
               <CardDescription className="text-center">
-                Sélectionnez la zone où se situe votre projet immobilier
+                Recherchez votre commune pour connaître sa zone PTZ
               </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                <Label htmlFor="zone">Zone</Label>
-                <Select value={formData.zone} onValueChange={(value) => handleInputChange("zone", value)}>
-                  <SelectTrigger id="zone" className="h-12">
-                    <SelectValue placeholder="Sélectionnez" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="A">Zone A</SelectItem>
-                    <SelectItem value="B1">Zone B1</SelectItem>
-                    <SelectItem value="B2">Zone B2</SelectItem>
-                    <SelectItem value="C">Zone C</SelectItem>
-                  </SelectContent>
-                </Select>
-                <div className="mt-4 p-3 bg-green-50 rounded-lg text-sm text-green-700">
-                  <p className="font-medium mb-1">Information sur les zones</p>
-                  <p>Zone A : Paris et grandes agglomérations</p>
-                  <p>Zone B1 : Grandes villes et périphéries</p>
-                  <p>Zone B2 : Villes moyennes</p>
-                  <p>Zone C : Reste du territoire</p>
-                </div>
+                <CommuneSearch 
+                  onSelect={handleCommuneSelect}
+                  selectedCommune={formData.selectedCommune}
+                />
+                {formData.selectedCommune && (
+                  <div className="mt-4 p-3 bg-green-50 rounded-lg text-sm text-green-700">
+                    <p className="font-medium mb-1">Information sur la zone</p>
+                    <p>Commune : {formData.selectedCommune.commune}</p>
+                    <p>Département : {formData.selectedCommune.departement}</p>
+                    <p>Zone PTZ : {formData.zone}</p>
+                  </div>
+                )}
               </div>
             </CardContent>
           </>
