@@ -32,6 +32,7 @@ import Image from "next/image"
 import { storeSubmission } from "@/actions/store-submission"
 import { CommuneSearch } from "@/components/commune-search"
 import { type Commune } from "@/lib/communes"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 
 // Mettre à jour les constantes ELIGIBILITY_THRESHOLDS et INCOME_TRANCHES pour qu'elles correspondent exactement aux tableaux du document
 
@@ -745,9 +746,6 @@ export default function PtzCalculator() {
       })
 
       if (!storeResult.success) {
-        setSubmissionError(
-          "Les résultats ont été calculés mais n'ont pas pu être enregistrés. Veuillez réessayer ultérieurement."
-        )
       }
 
       setResult(calculationResult)
@@ -855,7 +853,7 @@ export default function PtzCalculator() {
                       </div>
                       <div className="flex-grow">
                         <h3 className="font-medium text-lg mb-2">
-                          Je n’ai pas été propriétaire de ma résidence principale au cours des 2 dernières années
+                          Je n'ai pas été propriétaire de ma résidence principale au cours des 2 dernières années
                         </h3>
                         <p className="text-gray-600 text-sm">
                         Je peux être éligible au Prêt à Taux Zéro (PTZ)
@@ -886,7 +884,7 @@ export default function PtzCalculator() {
                       </div>
                       <div className="flex-grow">
                         <h3 className="font-medium text-lg mb-2">
-                          J’ai été propriétaire de ma résidence principale au cours des 2 dernières années
+                          J'ai été propriétaire de ma résidence principale au cours des 2 dernières années
                         </h3>
                         <p className="text-gray-600 text-sm">
                         Je ne suis pas éligible au Prêt à Taux Zéro (PTZ)
@@ -948,10 +946,8 @@ export default function PtzCalculator() {
               <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-2">
                 <MapPin className="h-6 w-6 text-[#008B3D]" />
               </div>
-              <CardTitle className="text-center text-xl">Où habitez-vous</CardTitle>
-              <CardDescription className="text-center">
-                Indiquez l'adresse où se situe votre projet immobilier
-              </CardDescription>
+              <CardTitle className="text-center text-xl">Où habitez-vous ?</CardTitle>
+
             </CardHeader>
             <CardContent>
               <AddressInputSection 
@@ -1232,6 +1228,16 @@ export default function PtzCalculator() {
                         <Users className="h-4 w-4 text-[#008B3D]" />
                       </div>
                       <span className="text-sm text-gray-500">Tranche</span>
+                      <TooltipProvider delayDuration={100}>
+                        <Tooltip>
+                          <TooltipTrigger>
+                            <Info className="h-5 w-5 text-gray-400 hover:text-[#008B3D] transition-colors" />
+                          </TooltipTrigger>
+                          <TooltipContent className="bg-[#008B3D] text-white border-[#008B3D] p-3">
+                            <p className="w-[250px] text-[15px]">Le revenu fiscal de référence détermine la tranche dans laquelle vous vous situez.</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
                     </div>
                     <p className="text-2xl font-bold">{result.tranche}</p>
                   </div>
@@ -1242,6 +1248,16 @@ export default function PtzCalculator() {
                         <Percent className="h-4 w-4 text-[#008B3D]" />
                       </div>
                       <span className="text-sm text-gray-500">Quotité</span>
+                      <TooltipProvider delayDuration={100}>
+                        <Tooltip>
+                          <TooltipTrigger>
+                            <Info className="h-5 w-5 text-gray-400 hover:text-[#008B3D] transition-colors" />
+                          </TooltipTrigger>
+                          <TooltipContent className="bg-[#008B3D] text-white border-[#008B3D] p-3">
+                            <p className="w-[250px] text-[15px]">La quotité du prêt (pourcentage finançable avec le PTZ) dépend de votre tranche de revenus</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
                     </div>
                     <p className="text-2xl font-bold">{result.quotity}%</p>
                   </div>
@@ -1252,6 +1268,16 @@ export default function PtzCalculator() {
                         <Euro className="h-4 w-4 text-[#008B3D]" />
                       </div>
                       <span className="text-sm text-gray-500">Montant PTZ</span>
+                      <TooltipProvider delayDuration={100}>
+                        <Tooltip>
+                          <TooltipTrigger>
+                            <Info className="h-5 w-5 text-gray-400 hover:text-[#008B3D] transition-colors" />
+                          </TooltipTrigger>
+                          <TooltipContent className="bg-[#008B3D] text-white border-[#008B3D] p-3">
+                            <p className="w-[250px] text-[15px]">Le montant du prêt est donné à titre indicatif, <b>hors assurance et hors frais de dossier</b> et calculé en fonction d'un coût plafonné qui varie selon la zone géographique et la composition du foyer.</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
                     </div>
                     <p className="text-2xl font-bold">{result.ptzAmount?.toLocaleString()} €</p>
                   </div>
@@ -1264,6 +1290,16 @@ export default function PtzCalculator() {
                         <Calculator className="h-4 w-4 text-[#008B3D]" />
                       </div>
                       <span className="text-sm text-gray-500">Coût du projet</span>
+                      <TooltipProvider delayDuration={100}>
+                        <Tooltip>
+                          <TooltipTrigger>
+                            <Info className="h-5 w-5 text-gray-400 hover:text-[#008B3D] transition-colors" />
+                          </TooltipTrigger>
+                          <TooltipContent className="bg-[#008B3D] text-white border-[#008B3D] p-3">
+                            <p className="w-[250px] text-[15px]">Correspond au montant total de votre projet. Attention, ce n'est pas ce montant qui est pris en compte pour calculer le montant du PTZ auquel vous avez droit.</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
                     </div>
                     {result.costCeiling && Number(formData.projectCost) > result.costCeiling ? (
                       <>
@@ -1281,6 +1317,16 @@ export default function PtzCalculator() {
                         <Home className="h-4 w-4 text-[#008B3D]" />
                       </div>
                       <span className="text-sm text-gray-500">Plafond de coût</span>
+                      <TooltipProvider delayDuration={100}>
+                        <Tooltip>
+                          <TooltipTrigger>
+                            <Info className="h-5 w-5 text-gray-400 hover:text-[#008B3D] transition-colors" />
+                          </TooltipTrigger>
+                          <TooltipContent className="bg-[#008B3D] text-white border-[#008B3D] p-3">
+                            <p className="w-[250px] text-[15px]">Le coût du projet retenu pour calculer le PTZ auquel vous avez droit, dépend des plafonds ci-dessous : </p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
                     </div>
                     <p className="text-xl font-bold">{result.costCeiling?.toLocaleString()} €</p>
                     <p className="text-xs text-gray-500 mt-1">pour {formData.householdSize} {Number(formData.householdSize) > 1 ? "personnes" : "personne"} en zone {formData.zone}</p>
@@ -1548,7 +1594,7 @@ const AddressInputSection = ({
 }) => {
   return (
     <div className="space-y-4">
-      <Label htmlFor="address">Adresse complète</Label>
+      <Label htmlFor="address">Indiquez nous votre ville de résidence</Label>
       <div className="relative">
         <Input
           id="address"

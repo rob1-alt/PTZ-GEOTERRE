@@ -116,14 +116,7 @@ export function CommuneSearch({ onSelect, selectedCommune }: CommuneSearchProps)
           className="h-12"
         />
         {isOpen && searchTerm && (
-          <div style={{
-            position: 'fixed',
-            left: '50%',
-            transform: 'translateX(-50%)',
-            width: 'calc(100% - 4rem)',
-            maxWidth: '600px',
-            zIndex: 9999
-          }} className="mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-[400px] overflow-auto">
+          <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-[300px] overflow-auto">
             {searchResults.length === 0 ? (
               <div className="p-2 text-sm text-gray-500">Aucune commune trouvée</div>
             ) : (
