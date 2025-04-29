@@ -12,26 +12,11 @@ interface CommuneSearchProps {
   selectedCommune?: Commune;
 }
 
-// Configuration optimisée de Fuse.js
-const fuseOptions = {
-  keys: ["commune", "departement", "codeDepartement"],
-  threshold: 0.3,
-  distance: 100,
-  includeScore: true,
-  minMatchCharLength: 2,
-  useExtendedSearch: true,
-  ignoreLocation: true,
-  shouldSort: true,
-  findAllMatches: false
-}
-
 export function CommuneSearch({ onSelect, selectedCommune }: CommuneSearchProps) {
-  const [communes, setCommunes] = useState<Commune[]>([])
   const [searchTerm, setSearchTerm] = useState("")
   const [isOpen, setIsOpen] = useState(false)
   const [searchResults, setSearchResults] = useState<Commune[]>([])
   const [fuse, setFuse] = useState<Fuse<Commune> | null>(null)
-  const [isClient, setIsClient] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const [dropdownStyle, setDropdownStyle] = useState({
     width: 0,
@@ -39,40 +24,41 @@ export function CommuneSearch({ onSelect, selectedCommune }: CommuneSearchProps)
     top: 0
   })
 
-  // Marquer le composant comme monté côté client
+  // Initialiser Fuse.js et charger les communes
   useEffect(() => {
-    setIsClient(true)
+    loadCommunes().then(communes => {
+      setFuse(new Fuse(communes, {
+        keys: ["commune", "departement", "codeDepartement"],
+        threshold: 0.3,
+        distance: 100,
+        includeScore: true,
+        minMatchCharLength: 2
+      }))
+    })
   }, [])
 
-  // Charger les communes et initialiser Fuse.js une seule fois
+  // Initialiser le terme de recherche si une commune est sélectionnée
   useEffect(() => {
-    if (!isClient) return
+    if (selectedCommune) {
+      setSearchTerm(selectedCommune.commune)
+    }
+  }, [selectedCommune])
 
-    loadCommunes().then(loadedCommunes => {
-      setCommunes(loadedCommunes)
-      setFuse(new Fuse(loadedCommunes, fuseOptions))
-    })
-  }, [isClient])
-
-  // Fonction pour mettre à jour la position du dropdown
+  // Mise à jour de la position du dropdown
   const updateDropdownPosition = useCallback(() => {
     if (isOpen && inputRef.current) {
       const rect = inputRef.current.getBoundingClientRect()
       setDropdownStyle({
         width: rect.width,
         left: rect.left,
-        top: rect.bottom + window.scrollY + 4 // 4px de marge
+        top: rect.bottom + window.scrollY + 4
       })
     }
   }, [isOpen])
 
-  // Mise à jour de la position du dropdown quand l'input change ou quand isOpen change
   useEffect(() => {
     updateDropdownPosition()
-  }, [isOpen, searchTerm, updateDropdownPosition])
-
-  // Écouter les événements de redimensionnement et de défilement
-  useEffect(() => {
+    
     if (isOpen) {
       window.addEventListener('resize', updateDropdownPosition)
       window.addEventListener('scroll', updateDropdownPosition)
@@ -84,34 +70,18 @@ export function CommuneSearch({ onSelect, selectedCommune }: CommuneSearchProps)
     }
   }, [isOpen, updateDropdownPosition])
 
-  // Gérer les clics en dehors du dropdown pour le fermer
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (inputRef.current && !inputRef.current.contains(event.target as Node)) {
-        setIsOpen(false)
-      }
-    }
-
-    document.addEventListener("mousedown", handleClickOutside)
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside)
-    }
-  }, [])
-
-  // Debounce la recherche pour éviter trop de calculs
   const debouncedSearch = useMemo(
-    () =>
-      debounce((term: string) => {
-        if (!term || !fuse) {
-          setSearchResults([])
-          return
-        }
-        const results = fuse
-          .search(term)
-          .map(result => result.item)
-          .slice(0, 10)
-        setSearchResults(results)
-      }, 150),
+    () => debounce((term: string) => {
+      if (!term || !fuse) {
+        setSearchResults([])
+        return
+      }
+      const results = fuse
+        .search(term)
+        .map(result => result.item)
+        .slice(0, 10)
+      setSearchResults(results)
+    }, 150),
     [fuse]
   )
 
@@ -129,28 +99,11 @@ export function CommuneSearch({ onSelect, selectedCommune }: CommuneSearchProps)
     setSearchResults([])
   }, [onSelect])
 
-  // Nettoyer le debounce lors du démontage
   useEffect(() => {
     return () => {
       debouncedSearch.cancel()
     }
   }, [debouncedSearch])
-
-  // Ne rien rendre côté serveur
-  if (!isClient) {
-    return (
-      <div className="space-y-2">
-        <Label htmlFor="commune">Commune</Label>
-        <Input
-          id="commune"
-          type="text"
-          placeholder="Rechercher une commune..."
-          className="h-12"
-          disabled
-        />
-      </div>
-    )
-  }
 
   return (
     <div className="space-y-2">
@@ -165,6 +118,7 @@ export function CommuneSearch({ onSelect, selectedCommune }: CommuneSearchProps)
           onFocus={() => setIsOpen(true)}
           className="h-12"
           ref={inputRef}
+          suppressHydrationWarning
         />
         {isOpen && searchTerm && (
           <div 

@@ -2,6 +2,7 @@
 
 import fs from "fs"
 import path from "path"
+import { sendEmail, generatePTZConfirmationEmail } from "@/src/utils/emailService"
 
 type SubmissionData = {
   firstName: string
@@ -73,6 +74,28 @@ export async function storeSubmission(data: SubmissionData) {
     // Ajouter au tableau et sauvegarder
     submissions.push(submissionWithDate)
     writeSubmissions(submissions)
+    
+    // Envoyer l'email de confirmation
+    try {
+      const emailTemplate = generatePTZConfirmationEmail({
+        firstName: data.firstName,
+        lastName: data.lastName,
+        eligible: data.eligible,
+        ptzAmount: data.ptzAmount,
+        reason: data.reason
+      });
+
+      await sendEmail({
+        to: data.email,
+        subject: emailTemplate.subject,
+        html: emailTemplate.html
+      });
+
+      console.log('Email de confirmation envoyé avec succès');
+    } catch (emailError) {
+      console.error('Erreur lors de l\'envoi de l\'email:', emailError);
+      // Ne pas faire échouer la soumission si l'envoi d'email échoue
+    }
     
     // Envoyer à Google Sheets en utilisant une API externe
     try {

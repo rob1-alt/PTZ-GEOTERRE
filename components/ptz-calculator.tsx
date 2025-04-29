@@ -395,9 +395,9 @@ export default function PtzCalculator() {
       case 2:
         return formData.notOwnerForTwoYears !== undefined
       case 3:
-        return formData.zone !== ""
+        return formData.selectedCommune !== undefined && formData.selectedCommune.commune && formData.zone
       case 4:
-        return formData.address.trim() !== ""
+        return formData.address !== ""
       case 5:
         return formData.income !== "" && !isNaN(Number(formData.income))
       case 6:
@@ -502,25 +502,27 @@ export default function PtzCalculator() {
         address: formData.address.trim(),
       }
 
-      // Vérifier que les champs obligatoires sont remplis
-      if (!cleanedFormData.firstName || !cleanedFormData.lastName || !cleanedFormData.email || 
-          !cleanedFormData.income || !cleanedFormData.householdSize || !cleanedFormData.zone || 
-          !cleanedFormData.housingType || !cleanedFormData.projectCost) {
-        throw new Error("Veuillez remplir tous les champs obligatoires")
+      // Vérifier les champs de contact
+      if (!cleanedFormData.firstName || !cleanedFormData.lastName || !cleanedFormData.email) {
+        throw new Error("Veuillez remplir tous les champs obligatoires (prénom, nom et email)")
       }
 
-      // Vérifier que l'email est valide
+      // Vérifier que l'email est valide avec une regex plus permissive
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
       if (!emailRegex.test(cleanedFormData.email)) {
-        throw new Error("Veuillez entrer une adresse email valide")
+        throw new Error("L'adresse email n'est pas valide")
       }
 
       // Calculer l'éligibilité
       const income = Number(cleanedFormData.income)
       const householdSize = Number(cleanedFormData.householdSize)
       const projectCost = Number(cleanedFormData.projectCost)
-      const zone = cleanedFormData.zone as keyof typeof ELIGIBILITY_THRESHOLDS
+      const zone = cleanedFormData.zone
       const housingType = cleanedFormData.housingType
+
+      if (!zone || !householdSize || !income || !housingType || !projectCost) {
+        throw new Error("Une erreur est survenue lors du calcul. Veuillez recommencer.")
+      }
 
       // Vérifier si le revenu est inférieur au seuil d'éligibilité
       const maxIncome =
@@ -609,10 +611,12 @@ export default function PtzCalculator() {
   }, [formData]);
 
   const handleCommuneSelect = useCallback((commune: Commune) => {
+    console.log('Commune sélectionnée:', commune) // Pour le débogage
     setFormData(prev => ({
       ...prev,
       selectedCommune: commune,
-      zone: commune.zonePTZ2024 || commune.zonePTZ2014
+      zone: commune.zonePTZ2024 || commune.zonePTZ2014,
+      address: commune.commune
     }))
   }, [])
 
@@ -796,13 +800,16 @@ export default function PtzCalculator() {
                 <MapPin className="h-6 w-6 text-[#008B3D]" />
               </div>
               <CardTitle className="text-center text-xl">Où habitez-vous ?</CardTitle>
-
+              <CardDescription className="text-center">
+                Indiquez votre ville de résidence actuelle
+              </CardDescription>
             </CardHeader>
             <CardContent>
-              <CitySearch 
-                address={formData.address}
-                onAddressChange={(value) => handleInputChange("address", value)}
-                inputRef={addressInputRef}
+              <CommuneSearch 
+                onSelect={(commune) => {
+                  handleInputChange("address", commune.commune);
+                }}
+                selectedCommune={formData.selectedCommune}
               />
             </CardContent>
           </>
@@ -1369,7 +1376,7 @@ export default function PtzCalculator() {
   }
 
   return (
-    <Card className="w-full shadow-xl overflow-hidden border-0">
+    <Card className="w-full shadow-xl overflow-hidden border-0" suppressHydrationWarning>
       <AnimatePresence mode="wait">
         <motion.div
           key={result ? "result" : `step-${step}`}
@@ -1377,13 +1384,14 @@ export default function PtzCalculator() {
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -10 }}
           transition={{ duration: 0.3 }}
+          suppressHydrationWarning
         >
           {result ? (
             renderResult()
           ) : (
             <>
               {step > 0 && (
-                <div className="p-4 border-b bg-gray-50">
+                <div className="p-4 border-b bg-gray-50" suppressHydrationWarning>
                   <Progress value={progress} className="h-2 bg-gray-200 [&>div]:bg-[#008B3D]" />
                   <p className="text-sm text-gray-500 mt-2 text-center">
                     Étape {step} sur {totalSteps}
@@ -1395,7 +1403,7 @@ export default function PtzCalculator() {
           )}
         </motion.div>
       </AnimatePresence>
-      <CardFooter className="flex justify-between p-6 bg-gray-50">
+      <CardFooter className="flex justify-between p-6 bg-gray-50" suppressHydrationWarning>
         {result ? (
           <Button onClick={resetForm} className="w-full bg-[#008B3D] hover:bg-green-600">
             Nouvelle simulation
@@ -1404,17 +1412,17 @@ export default function PtzCalculator() {
           <>
             {step > 0 && (
               <>
-                <Button variant="outline" onClick={prevStep} disabled={step === 0} className="flex items-center gap-1">
-                  <ArrowLeft className="h-4 w-4" /> Précédent
+                <Button variant="outline" onClick={prevStep} disabled={step === 0}>
+                  <ArrowLeft className="h-4 w-4 mr-2" /> Précédent
                 </Button>
                 <Button
                   onClick={nextStep}
                   disabled={!isStepValid() || isSubmitting}
-                  className="flex items-center gap-1 bg-[#008B3D] hover:bg-green-600"
+                  className="bg-[#008B3D] hover:bg-green-600"
                 >
                   {step === totalSteps ? (isSubmitting ? "Calcul en cours..." : "Calculer") : 
                     step === 0 ? "Commencer la simulation" : "Suivant"}{" "}
-                  {!isSubmitting && <ArrowRight className="h-4 w-4" />}
+                  {!isSubmitting && <ArrowRight className="h-4 w-4 ml-2" />}
                 </Button>
               </>
             )}
