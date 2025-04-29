@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback, useMemo } from "react"
+import { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { type Commune, loadCommunes } from "@/lib/communes"
@@ -32,6 +32,12 @@ export function CommuneSearch({ onSelect, selectedCommune }: CommuneSearchProps)
   const [searchResults, setSearchResults] = useState<Commune[]>([])
   const [fuse, setFuse] = useState<Fuse<Commune> | null>(null)
   const [isClient, setIsClient] = useState(false)
+  const inputRef = useRef<HTMLInputElement>(null)
+  const [dropdownStyle, setDropdownStyle] = useState({
+    width: 0,
+    left: 0,
+    top: 0
+  })
 
   // Marquer le composant comme monté côté client
   useEffect(() => {
@@ -47,6 +53,50 @@ export function CommuneSearch({ onSelect, selectedCommune }: CommuneSearchProps)
       setFuse(new Fuse(loadedCommunes, fuseOptions))
     })
   }, [isClient])
+
+  // Fonction pour mettre à jour la position du dropdown
+  const updateDropdownPosition = useCallback(() => {
+    if (isOpen && inputRef.current) {
+      const rect = inputRef.current.getBoundingClientRect()
+      setDropdownStyle({
+        width: rect.width,
+        left: rect.left,
+        top: rect.bottom + window.scrollY + 4 // 4px de marge
+      })
+    }
+  }, [isOpen])
+
+  // Mise à jour de la position du dropdown quand l'input change ou quand isOpen change
+  useEffect(() => {
+    updateDropdownPosition()
+  }, [isOpen, searchTerm, updateDropdownPosition])
+
+  // Écouter les événements de redimensionnement et de défilement
+  useEffect(() => {
+    if (isOpen) {
+      window.addEventListener('resize', updateDropdownPosition)
+      window.addEventListener('scroll', updateDropdownPosition)
+      
+      return () => {
+        window.removeEventListener('resize', updateDropdownPosition)
+        window.removeEventListener('scroll', updateDropdownPosition)
+      }
+    }
+  }, [isOpen, updateDropdownPosition])
+
+  // Gérer les clics en dehors du dropdown pour le fermer
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (inputRef.current && !inputRef.current.contains(event.target as Node)) {
+        setIsOpen(false)
+      }
+    }
+
+    document.addEventListener("mousedown", handleClickOutside)
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside)
+    }
+  }, [])
 
   // Debounce la recherche pour éviter trop de calculs
   const debouncedSearch = useMemo(
@@ -114,9 +164,17 @@ export function CommuneSearch({ onSelect, selectedCommune }: CommuneSearchProps)
           onChange={handleInputChange}
           onFocus={() => setIsOpen(true)}
           className="h-12"
+          ref={inputRef}
         />
         {isOpen && searchTerm && (
-          <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-[300px] overflow-auto">
+          <div 
+            className="fixed z-[9999] bg-white border border-gray-200 rounded-lg shadow-lg max-h-[300px] overflow-auto" 
+            style={{
+              width: `${dropdownStyle.width}px`,
+              left: `${dropdownStyle.left}px`,
+              top: `${dropdownStyle.top}px`
+            }}
+          >
             {searchResults.length === 0 ? (
               <div className="p-2 text-sm text-gray-500">Aucune commune trouvée</div>
             ) : (

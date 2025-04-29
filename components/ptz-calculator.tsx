@@ -31,8 +31,10 @@ import { BankPartners } from "./bank-partners"
 import Image from "next/image"
 import { storeSubmission } from "@/actions/store-submission"
 import { CommuneSearch } from "@/components/commune-search"
-import { type Commune } from "@/lib/communes"
+import { type Commune, loadCommunes } from "@/lib/communes"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import Fuse from "fuse.js"
+import { debounce } from "lodash"
 
 // Mettre à jour les constantes ELIGIBILITY_THRESHOLDS et INCOME_TRANCHES pour qu'elles correspondent exactement aux tableaux du document
 
@@ -156,41 +158,6 @@ const COST_CEILINGS = {
   }
 }
 
-// Déclaration pour l'API Google Maps et Places
-declare global {
-  interface Window {
-    google?: {
-      maps: {
-        places: {
-          Autocomplete: new (
-            input: HTMLInputElement,
-            options?: { 
-              types: string[];
-              componentRestrictions?: { country: string };
-              fields?: string[];
-            }
-          ) => google.maps.places.Autocomplete
-        }
-      }
-    }
-  }
-
-  namespace google.maps.places {
-    class Autocomplete {
-      addListener(event: string, callback: () => void): void;
-      getPlace(): {
-        formatted_address?: string;
-        geometry?: {
-          location?: {
-            lat(): number;
-            lng(): number;
-          }
-        }
-      };
-    }
-  }
-}
-
 // Types
 type FormData = {
   firstName: string;
@@ -219,7 +186,6 @@ type ResultType = {
 };
 
 // Constants 
-const GOOGLE_MAPS_API_KEY = "AIzaSyA7ZSI3CiR0ic_9eslCeBCgdKzGLXsCiF8";
 const PRIMARY_COLOR = "#008B3D";
 const HOVER_COLOR = "bg-green-600";
 
@@ -351,11 +317,9 @@ export default function PtzCalculator() {
   const [showPartners, setShowPartners] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submissionError, setSubmissionError] = useState<string | null>(null)
-  const [mapVisible, setMapVisible] = useState(false)
   
   // Refs
   const addressInputRef = useRef<HTMLInputElement | null>(null)
-  const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null)
   
   // Constants
   const totalSteps = 8
@@ -453,91 +417,6 @@ export default function PtzCalculator() {
     }
   }, [step, formData])
   
-  // Fonction pour initialiser l'autocomplétion Google Places
-  const initAutocomplete = useCallback(() => {
-    if (addressInputRef.current && window.google) {
-      autocompleteRef.current = new window.google.maps.places.Autocomplete(
-        addressInputRef.current,
-        { 
-          types: ['address'],
-          componentRestrictions: { country: 'fr' }, // Restreindre aux adresses françaises
-          fields: ['formatted_address', 'geometry'], // Récupérer l'adresse formatée et la position
-        }
-      )
-
-      // Écouter les événements de sélection de lieu
-      autocompleteRef.current.addListener('place_changed', () => {
-        const place = autocompleteRef.current?.getPlace()
-        if (place && place.formatted_address) {
-          handleInputChange("address", place.formatted_address)
-          // Afficher automatiquement la carte lorsqu'une adresse est sélectionnée
-          setMapVisible(true)
-        }
-      })
-      
-      // Style CSS pour les suggestions d'autocomplétion
-      addAutocompletionStyles()
-      
-      // Focus sur le champ d'adresse pour activer l'autocomplétion immédiatement
-      setTimeout(() => {
-        if (addressInputRef.current) {
-          addressInputRef.current.focus()
-        }
-      }, 100)
-    }
-  }, [handleInputChange])
-  
-  // Fonction pour ajouter les styles CSS d'autocomplétion
-  const addAutocompletionStyles = useCallback(() => {
-    const styleId = 'google-places-autocomplete-styles'
-    if (document.getElementById(styleId)) return
-    
-    const style = document.createElement('style')
-    style.id = styleId
-    style.textContent = `
-      .pac-container {
-        border-radius: 0.5rem;
-        border: 1px solid #d1d5db;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-        font-family: sans-serif;
-        margin-top: 4px;
-        z-index: 9999 !important;
-        min-width: 300px;
-      }
-      .pac-item {
-        padding: 10px 15px;
-        font-size: 14px;
-        cursor: pointer;
-        border-top: 1px solid #e5e7eb;
-      }
-      .pac-item:first-child {
-        border-top: none;
-      }
-      .pac-item:hover {
-        background-color: #f3f9f1;
-      }
-      .pac-item-selected, .pac-item-selected:hover {
-        background-color: #e6f4e6;
-      }
-      .pac-icon {
-        margin-right: 10px;
-      }
-      .pac-item-query {
-        font-size: 15px;
-        font-weight: 500;
-        color: #111827;
-      }
-      .pac-matched {
-        font-weight: 700;
-        color: #10b981;
-      }
-      .pac-logo {
-        display: none !important;
-      }
-    `
-    document.head.appendChild(style)
-  }, [])
-  
   // Fonction pour gérer l'appui sur la touche Entrée
   const handleKeyDown = useCallback((event: KeyboardEvent) => {
     if (event.key === 'Enter' && !result) {
@@ -599,36 +478,6 @@ export default function PtzCalculator() {
       console.error("Erreur lors de la sauvegarde des données:", e)
     }
   }, [step, formData, result, showPartners])
-
-  // Initialiser l'autocomplétion Google Places
-  useEffect(() => {
-    // Vérifiez si nous sommes dans le navigateur et à l'étape d'adresse
-    if (typeof window === 'undefined' || step !== 3) {
-      // Masquer la carte si on n'est plus à l'étape adresse
-      if (step !== 3) {
-        setMapVisible(false)
-      }
-      return;
-    }
-    
-    if (addressInputRef.current) {
-      // Charger le script de l'API Google Maps si ce n'est pas déjà fait
-      if (!window.google || !window.google.maps) {
-        const scriptId = 'google-maps-api'
-        if (!document.getElementById(scriptId)) {
-          const script = document.createElement('script')
-          script.id = scriptId
-          script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&libraries=places`
-          script.async = true
-          script.defer = true
-          script.onload = initAutocomplete
-          document.head.appendChild(script)
-        }
-      } else {
-        initAutocomplete()
-      }
-    }
-  }, [step, initAutocomplete])
 
   // Ajouter l'écouteur d'événements clavier
   useEffect(() => {
@@ -916,9 +765,9 @@ export default function PtzCalculator() {
               <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-2">
                 <MapPin className="h-6 w-6 text-[#008B3D]" />
               </div>
-              <CardTitle className="text-center text-xl">Zone géographique</CardTitle>
+              <CardTitle className="text-center text-xl">Zone géographique de la recherche du bien</CardTitle>
               <CardDescription className="text-center">
-                Recherchez votre commune pour connaître sa zone PTZ
+                Recherchez votre commune de recherche pour connaître sa zone PTZ
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -950,11 +799,9 @@ export default function PtzCalculator() {
 
             </CardHeader>
             <CardContent>
-              <AddressInputSection 
+              <CitySearch 
                 address={formData.address}
-                mapVisible={mapVisible}
                 onAddressChange={(value) => handleInputChange("address", value)}
-                onMapVisibilityChange={setMapVisible}
                 inputRef={addressInputRef}
               />
             </CardContent>
@@ -1578,20 +1425,120 @@ export default function PtzCalculator() {
   )
 }
 
-// Component pour la section d'adresse avec carte
-const AddressInputSection = ({ 
+// Component pour la recherche de ville 
+const CitySearch = ({ 
   address, 
-  mapVisible, 
   onAddressChange, 
-  onMapVisibilityChange, 
   inputRef 
 }: { 
   address: string; 
-  mapVisible: boolean; 
   onAddressChange: (value: string) => void; 
-  onMapVisibilityChange: (visible: boolean) => void; 
   inputRef: React.RefObject<HTMLInputElement | null>;
 }) => {
+  const [isOpen, setIsOpen] = useState(false)
+  const [searchResults, setSearchResults] = useState<Commune[]>([])
+  const [fuse, setFuse] = useState<Fuse<Commune> | null>(null)
+  const [isClient, setIsClient] = useState(false)
+  const [dropdownStyle, setDropdownStyle] = useState({
+    width: 0,
+    left: 0,
+    top: 0
+  })
+
+  // Marquer le composant comme monté côté client
+  useEffect(() => {
+    setIsClient(true)
+  }, [])
+
+  // Charger les communes et initialiser Fuse.js une seule fois
+  useEffect(() => {
+    if (!isClient) return
+
+    loadCommunes().then(loadedCommunes => {
+      setFuse(new Fuse(loadedCommunes, {
+        keys: ["commune", "departement", "codeDepartement"],
+        threshold: 0.3,
+        distance: 100,
+        includeScore: true,
+        minMatchCharLength: 2,
+        useExtendedSearch: true,
+        ignoreLocation: true,
+        shouldSort: true,
+        findAllMatches: false
+      }))
+    })
+  }, [isClient])
+
+  // Fonction pour mettre à jour la position du dropdown
+  const updateDropdownPosition = useCallback(() => {
+    if (isOpen && inputRef.current) {
+      const rect = inputRef.current.getBoundingClientRect()
+      setDropdownStyle({
+        width: rect.width,
+        left: rect.left,
+        top: rect.bottom + window.scrollY + 4
+      })
+    }
+  }, [isOpen, inputRef])
+
+  // Mise à jour de la position et gestion des événements
+  useEffect(() => {
+    updateDropdownPosition()
+    
+    if (isOpen) {
+      const handleClickOutside = (event: MouseEvent) => {
+        if (inputRef.current && !inputRef.current.contains(event.target as Node)) {
+          setIsOpen(false)
+        }
+      }
+      
+      window.addEventListener('resize', updateDropdownPosition)
+      window.addEventListener('scroll', updateDropdownPosition)
+      document.addEventListener("mousedown", handleClickOutside)
+      
+      return () => {
+        window.removeEventListener('resize', updateDropdownPosition)
+        window.removeEventListener('scroll', updateDropdownPosition)
+        document.removeEventListener("mousedown", handleClickOutside)
+      }
+    }
+  }, [isOpen, updateDropdownPosition, inputRef])
+
+  // Recherche avec debounce
+  const debouncedSearch = useMemo(
+    () => debounce((term: string) => {
+      if (!term || !fuse) {
+        setSearchResults([])
+        return
+      }
+      const results = fuse
+        .search(term)
+        .map(result => result.item)
+        .slice(0, 10)
+      setSearchResults(results)
+    }, 150),
+    [fuse]
+  )
+
+  // Gestion des événements de l'input
+  const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value
+    onAddressChange(value)
+    setIsOpen(true)
+    debouncedSearch(value)
+  }, [debouncedSearch, onAddressChange])
+
+  const handleSelect = useCallback((commune: Commune) => {
+    onAddressChange(commune.commune)
+    setIsOpen(false)
+    setSearchResults([])
+  }, [onAddressChange])
+
+  // Nettoyer le debounce lors du démontage
+  useEffect(() => {
+    return () => debouncedSearch.cancel()
+  }, [debouncedSearch])
+
   return (
     <div className="space-y-4">
       <Label htmlFor="address">Indiquez nous votre ville de résidence</Label>
@@ -1600,63 +1547,47 @@ const AddressInputSection = ({
           id="address"
           type="text"
           ref={inputRef}
-          placeholder="Commencez à taper votre adresse..."
+          placeholder="Commencez à taper votre ville..."
           value={address}
-          onChange={(e) => {
-            onAddressChange(e.target.value)
-            // Si l'utilisateur efface l'adresse, masquer la carte
-            if (e.target.value.trim() === '') {
-              onMapVisibilityChange(false)
-            }
-          }}
+          onChange={handleInputChange}
+          onFocus={() => setIsOpen(true)}
           className="h-12"
-          autoComplete="off" // Désactiver l'autocomplétion du navigateur pour éviter les conflits
+          autoComplete="off"
         />
       </div>
       <div className="mt-2 text-sm text-gray-500">
         Ces informations nous permettent de mieux évaluer votre éligibilité au PTZ.
       </div>
       
-      {/* Carte Google Maps intégrée */}
-      {address.trim() !== "" && mapVisible && (
-        <div className="mt-4 rounded-lg overflow-hidden border border-gray-300 shadow-sm">
-          <div className="relative w-full h-[300px]">
-            <iframe
-              width="100%"
-              height="100%"
-              style={{ border: 0, position: 'absolute', top: 0, left: 0 }}
-              loading="lazy"
-              allowFullScreen
-              src={`https://www.google.com/maps/embed/v1/place?key=${GOOGLE_MAPS_API_KEY}&q=${encodeURIComponent(address)}&zoom=16`}
-            ></iframe>
+      {isOpen && address && (
+        <div 
+          className="fixed z-[9999] bg-white border border-gray-200 rounded-lg shadow-lg max-h-[300px] overflow-auto" 
+          style={{
+            width: `${dropdownStyle.width}px`,
+            left: `${dropdownStyle.left}px`,
+            top: `${dropdownStyle.top}px`
+          }}
+        >
+          {searchResults.length === 0 ? (
+            <div className="p-2 text-sm text-gray-500">Aucune ville trouvée</div>
+          ) : (
+            <div className="py-1">
+              {searchResults.map((commune) => (
+                <button
+                  key={`${commune.codeDepartement}-${commune.commune}`}
+                  onClick={() => handleSelect(commune)}
+                  className="w-full text-left px-4 py-2 hover:bg-gray-100 focus:bg-gray-100 focus:outline-none"
+                >
+                  <div className="flex flex-col">
+                    <span className="font-medium">{commune.commune}</span>
+                    <span className="text-sm text-gray-500">
+                      {commune.departement} ({commune.codeDepartement})
+                    </span>
           </div>
-          <div className="bg-gray-100 py-2 px-4 text-sm text-gray-600 flex justify-between items-center">
-            <span className="truncate">{address}</span>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="text-gray-500 hover:text-[#008B3D]"
-              onClick={() => onMapVisibilityChange(false)}
-            >
-              Masquer la carte
-            </Button>
-          </div>
+                </button>
+              ))}
         </div>
       )}
-      
-      {/* Bouton pour afficher la carte si elle n'est pas déjà visible */}
-      {address.trim() !== "" && !mapVisible && (
-        <div className="mt-4">
-          <Button
-            type="button"
-            variant="outline" 
-            className="w-full flex items-center justify-center gap-2 border-[#008B3D] text-[#008B3D] hover:bg-green-50"
-            onClick={() => onMapVisibilityChange(true)}
-          >
-            <MapPin className="h-4 w-4" />
-            Afficher sur la carte
-          </Button>
         </div>
       )}
     </div>
