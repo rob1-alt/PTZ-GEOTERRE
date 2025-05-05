@@ -491,7 +491,7 @@ export default function PtzCalculator() {
   }, [handleKeyDown]);
 
   // Fonction de validation des champs
-  const validateForm = () => {
+  const validateForm = useCallback(() => {
     const errors: {[key: string]: string} = {};
     
     if (!formData.firstName?.trim()) {
@@ -506,9 +506,12 @@ export default function PtzCalculator() {
       errors.email = "L'email n'est pas valide";
     }
 
+    // Mettre à jour les erreurs
     setFormErrors(errors);
+    
+    // Retourner true si aucune erreur
     return Object.keys(errors).length === 0;
-  };
+  }, [formData.firstName, formData.lastName, formData.email]);
 
   const calculateEligibility = useCallback(async () => {
     // Valider le formulaire avant de procéder
@@ -528,17 +531,6 @@ export default function PtzCalculator() {
         email: formData.email.trim(),
         phone: formData.phone ? formData.phone.trim() : "", // Rendre le téléphone optionnel
         address: formData.address.trim(),
-      }
-
-      // Vérifier les champs de contact obligatoires (sans le téléphone)
-      if (!cleanedFormData.firstName || !cleanedFormData.lastName || !cleanedFormData.email) {
-        throw new Error("Veuillez remplir tous les champs obligatoires (prénom, nom et email)")
-      }
-
-      // Vérifier que l'email est valide
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-      if (!emailRegex.test(cleanedFormData.email)) {
-        throw new Error("L'adresse email n'est pas valide")
       }
 
       // Calculer l'éligibilité
@@ -563,45 +555,40 @@ export default function PtzCalculator() {
       if (income > maxIncome) {
         calculationResult = {
           eligible: false,
-          reason: `Vos revenus (${income.toLocaleString()} €) dépassent le plafond d'éligibilité au PTZ (${maxIncome.toLocaleString()} €) pour votre zone et la taille de votre foyer.`,
-        }
+          reason: `Vos revenus (${income.toLocaleString()} €) dépassent le plafond d'éligibilité au PTZ (${maxIncome.toLocaleString()} €) pour votre zone et la taille de votre foyer.`
+        };
       } else {
-        // Déterminer la tranche
-        let tranche = 0
-        const tranchesForZone = INCOME_TRANCHES[zone as keyof typeof INCOME_TRANCHES]
+        // Déterminer la tranche en fonction du revenu
+        let tranche;
+        const ratio = income / maxIncome;
 
-        if (income <= tranchesForZone[1]) {
-          tranche = 1
-        } else if (income <= tranchesForZone[2]) {
-          tranche = 2
-        } else if (income <= tranchesForZone[3]) {
-          tranche = 3
-        } else if (income <= maxIncome) {
-          tranche = 4
-        } else {
-          calculationResult = {
-            eligible: false,
-            reason: "Vos revenus ne correspondent à aucune tranche d'éligibilité au PTZ.",
-          }
-          setResult(calculationResult)
-          return;
-        }
+        if (ratio <= 0.25) tranche = 1;
+        else if (ratio <= 0.5) tranche = 2;
+        else if (ratio <= 0.75) tranche = 3;
+        else tranche = 4;
 
-        // Déterminer la quotité
-        const quotity =
-          housingType === "individual"
-            ? INDIVIDUAL_QUOTITIES[tranche as keyof typeof INDIVIDUAL_QUOTITIES]
-            : COLLECTIVE_QUOTITIES[tranche as keyof typeof COLLECTIVE_QUOTITIES]
+        // Déterminer la quotité en fonction de la tranche
+        const quotityMap = {
+          1: 30,
+          2: 20,
+          3: 20,
+          4: 10
+        };
+        const quotity = quotityMap[tranche as keyof typeof quotityMap];
 
-        // Déterminer le plafond de coût en fonction de la zone et du nombre de personnes
-        const householdSizeForCeiling = Math.min(householdSize, 5) as keyof (typeof COST_CEILINGS)["A"];
-        const costCeiling = COST_CEILINGS[zone as keyof typeof COST_CEILINGS][householdSizeForCeiling];
-        
-        // Plafonner le coût du projet si nécessaire
+        // Calculer le plafond de coût en fonction de la zone et de la taille du foyer
+        const costCeilingBase = {
+          A: 150000,
+          B1: 135000,
+          B2: 110000,
+          C: 100000
+        };
+
+        const costCeiling = costCeilingBase[zone as keyof typeof costCeilingBase] * (householdSize <= 4 ? 1 : Math.min(1.4, 1 + (householdSize - 4) * 0.1));
+
+        // Calculer le montant du PTZ
         const cappedProjectCost = Math.min(projectCost, costCeiling);
-        
-        // Calculer le montant du PTZ sur le coût plafonné
-        const ptzAmount = Math.round((cappedProjectCost * quotity) / 100);
+        const ptzAmount = Math.round(cappedProjectCost * (quotity / 100));
 
         calculationResult = {
           eligible: true,
@@ -609,34 +596,33 @@ export default function PtzCalculator() {
           quotity,
           costCeiling,
           cappedProjectCost,
-          ptzAmount,
-        }
+          ptzAmount
+        };
       }
 
-      // Stocker les données dans Google Sheets avec les résultats du calcul
-      const storeResult = await storeSubmission({
+      // Stocker le résultat dans le state
+      setResult(calculationResult);
+
+      // Enregistrer les données
+      const submissionData = {
         ...cleanedFormData,
-        eligible: calculationResult.eligible,
-        tranche: calculationResult.tranche,
-        quotity: calculationResult.quotity,
-        ptzAmount: calculationResult.ptzAmount,
-        reason: calculationResult.reason,
-        notOwnerForTwoYears: cleanedFormData.notOwnerForTwoYears
-      })
+        ...calculationResult
+      };
 
-      if (!storeResult.success) {
+      const response = await storeSubmission(submissionData);
+      
+      if (!response.success) {
+        throw new Error(response.error || "Erreur lors de l'enregistrement des données");
       }
 
-      setResult(calculationResult)
     } catch (error) {
-      console.error("Erreur lors du calcul d'éligibilité:", error)
-      setSubmissionError(
-        error instanceof Error ? error.message : "Une erreur est survenue lors du calcul. Veuillez réessayer ultérieurement."
-      )
+      console.error("Erreur lors du calcul:", error);
+      setSubmissionError(error instanceof Error ? error.message : "Une erreur est survenue");
+      setResult(null);
     } finally {
-      setIsSubmitting(false)
+      setIsSubmitting(false);
     }
-  }, [formData]);
+  }, [formData, validateForm]);
 
   const handleCommuneSelect = useCallback((commune: Commune) => {
     console.log('Commune sélectionnée:', commune) // Pour le débogage
@@ -1457,17 +1443,25 @@ export default function PtzCalculator() {
           <>
             {step > 0 && (
               <>
-                <Button variant="outline" onClick={prevStep} disabled={step === 0}>
+                <Button variant="outline" onClick={prevStep} disabled={step === 0 || isSubmitting}>
                   <ArrowLeft className="h-4 w-4 mr-2" /> Précédent
                 </Button>
                 <Button
-                  onClick={nextStep}
+                  onClick={step === totalSteps ? calculateEligibility : nextStep}
                   disabled={!isStepValid() || isSubmitting}
                   className="bg-[#008B3D] hover:bg-green-600"
                 >
-                  {step === totalSteps ? (isSubmitting ? "Calcul en cours..." : "Calculer") : 
-                    step === 0 ? "Commencer la simulation" : "Suivant"}{" "}
-                  {!isSubmitting && <ArrowRight className="h-4 w-4 ml-2" />}
+                  {isSubmitting ? (
+                    <>
+                      <span className="animate-spin mr-2">⏳</span>
+                      Calcul en cours...
+                    </>
+                  ) : (
+                    <>
+                      {step === totalSteps ? "Calculer" : step === 0 ? "Commencer la simulation" : "Suivant"}
+                      {!isSubmitting && <ArrowRight className="h-4 w-4 ml-2" />}
+                    </>
+                  )}
                 </Button>
               </>
             )}
