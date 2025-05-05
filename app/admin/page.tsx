@@ -121,12 +121,21 @@ export default function Admin() {
       if (!response.ok) {
         throw new Error(`Erreur HTTP: ${response.status}`);
       }
-      const data = await response.json();
       
-      if (data.filePath) {
-        // Télécharger le fichier
-        window.location.href = data.filePath;
-      }
+      // Récupérer le blob de la réponse
+      const blob = await response.blob();
+      
+      // Créer un lien temporaire pour le téléchargement
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'ptz_submissions.csv';
+      document.body.appendChild(a);
+      a.click();
+      
+      // Nettoyer
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
     } catch (err) {
       setError('Erreur lors de l\'export CSV');
       console.error('Erreur:', err);

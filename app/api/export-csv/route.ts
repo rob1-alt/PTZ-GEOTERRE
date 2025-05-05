@@ -57,25 +57,83 @@ function readSubmissions(): any[] {
   }
 }
 
-async function exportSubmissionsToCSV() {
+export async function GET(request: NextRequest) {
+  // Vérifier l'authentification
+  if (!isAuthenticated(request)) {
+    return NextResponse.json({ error: 'Non autorisé' }, { status: 401 });
+  }
+
   try {
     const submissions = readSubmissions();
 
     if (submissions.length === 0) {
-      return { success: false, error: "Aucune donnée à exporter." };
+      return NextResponse.json({ error: "Aucune donnée à exporter." }, { status: 400 });
     }
 
-    // Extraire les en-têtes à partir des clés de la première soumission
-    const headers = Object.keys(submissions[0]).join(",") + "\n";
+    // Définir l'ordre des colonnes
+    const columns = [
+      "submissionDate",
+      "firstName",
+      "lastName",
+      "email",
+      "phone",
+      "zone",
+      "address",
+      "housingType",
+      "householdSize",
+      "income",
+      "projectCost",
+      "eligible",
+      "tranche",
+      "quotity",
+      "ptzAmount",
+      "reason"
+    ];
+
+    // Créer les en-têtes avec des noms plus lisibles
+    const headers = [
+      "Date de soumission",
+      "Prénom",
+      "Nom",
+      "Email",
+      "Téléphone",
+      "Zone",
+      "Adresse",
+      "Type de logement",
+      "Taille du foyer",
+      "Revenu",
+      "Coût du projet",
+      "Éligible",
+      "Tranche",
+      "Quotité",
+      "Montant PTZ",
+      "Raison"
+    ].join(",") + "\n";
 
     // Convertir les données en format CSV
     const csvRows = submissions
       .map((submission) => {
-        return Object.values(submission)
-          .map((value) => {
+        return columns
+          .map((column) => {
+            const value = submission[column];
+            if (value === undefined || value === null) {
+              return "";
+            }
             if (typeof value === "string") {
               // Échapper les guillemets et entourer de guillemets
               return `"${value.replace(/"/g, '""')}"`;
+            }
+            if (typeof value === "boolean") {
+              return value ? "Oui" : "Non";
+            }
+            if (column === "housingType") {
+              return value === "individual" ? "Individuel" : "Collectif";
+            }
+            if (column === "quotity") {
+              return value ? `${value}%` : "";
+            }
+            if (column === "ptzAmount" || column === "income" || column === "projectCost") {
+              return value ? `${value} €` : "";
             }
             return value;
           })
@@ -85,38 +143,14 @@ async function exportSubmissionsToCSV() {
 
     const csvData = headers + csvRows;
 
-    // Définir le chemin du fichier
-    const dir = path.join(process.cwd(), "public", "exports");
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-    }
-    const filePath = path.join(dir, "ptz_submissions.csv");
-
-    // Écrire les données dans un fichier CSV
-    fs.writeFileSync(filePath, csvData);
-
-    return { success: true, filePath: "/exports/ptz_submissions.csv" };
-  } catch (error) {
-    console.error("Erreur lors de l'export CSV:", error);
-    return { success: false, error: "Erreur lors de l'export des données" };
-  }
-}
-
-export async function GET(request: NextRequest) {
-  // Vérifier l'authentification
-  if (!isAuthenticated(request)) {
-    return NextResponse.json({ error: 'Non autorisé' }, { status: 401 });
-  }
-  
-  try {
-    const result = await exportSubmissionsToCSV();
-
-    if (!result.success) {
-      return NextResponse.json({ error: result.error }, { status: 400 });
-    }
-
-    // Renvoyer le chemin du fichier CSV
-    return NextResponse.json({ filePath: result.filePath });
+    // Créer une réponse avec le contenu CSV
+    const response = new NextResponse(csvData);
+    
+    // Définir les en-têtes pour le téléchargement
+    response.headers.set('Content-Type', 'text/csv; charset=utf-8');
+    response.headers.set('Content-Disposition', 'attachment; filename=ptz_submissions.csv');
+    
+    return response;
   } catch (error) {
     console.error("Erreur lors de l'export CSV:", error);
     return NextResponse.json({ 
