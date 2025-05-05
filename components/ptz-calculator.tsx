@@ -26,6 +26,7 @@ import {
   FileText,
   Clock,
   Star,
+  UserCircle,
 } from "lucide-react"
 import { BankPartners } from "./bank-partners"
 import Image from "next/image"
@@ -317,6 +318,7 @@ export default function PtzCalculator() {
   const [showPartners, setShowPartners] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submissionError, setSubmissionError] = useState<string | null>(null)
+  const [formErrors, setFormErrors] = useState<{[key: string]: string}>({})
   
   // Refs
   const addressInputRef = useRef<HTMLInputElement | null>(null)
@@ -326,15 +328,16 @@ export default function PtzCalculator() {
   const progress = ((step - 1) / (totalSteps - 1)) * 100
   
   // Memoized handlers
-  const handleInputChange = useCallback(<K extends keyof FormData>(
-    field: K,
-    value: FormData[K]
-  ) => {
-    setFormData(prev => ({
-      ...prev,
-      [field]: value
-    }))
-  }, [])
+  const handleInputChange = (field: keyof FormData, value: string | boolean) => {
+    setFormData((prev) => ({ ...prev, [field]: value }))
+    if (formErrors[field]) {
+      setFormErrors((prev) => {
+        const newErrors = { ...prev }
+        delete newErrors[field]
+        return newErrors
+      })
+    }
+  }
   
   const nextStep = useCallback(() => {
     if (step < totalSteps) {
@@ -487,9 +490,34 @@ export default function PtzCalculator() {
     };
   }, [handleKeyDown]);
 
+  // Fonction de validation des champs
+  const validateForm = () => {
+    const errors: {[key: string]: string} = {};
+    
+    if (!formData.firstName?.trim()) {
+      errors.firstName = "Le prénom est requis";
+    }
+    if (!formData.lastName?.trim()) {
+      errors.lastName = "Le nom est requis";
+    }
+    if (!formData.email?.trim()) {
+      errors.email = "L'email est requis";
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email.trim())) {
+      errors.email = "L'email n'est pas valide";
+    }
+
+    setFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
   const calculateEligibility = useCallback(async () => {
-    setIsSubmitting(true)
-    setSubmissionError(null)
+    // Valider le formulaire avant de procéder
+    if (!validateForm()) {
+      return;
+    }
+
+    setIsSubmitting(true);
+    setSubmissionError(null);
 
     try {
       // Nettoyer les données avant de les envoyer
@@ -498,16 +526,16 @@ export default function PtzCalculator() {
         firstName: formData.firstName.trim(),
         lastName: formData.lastName.trim(),
         email: formData.email.trim(),
-        phone: formData.phone.trim(),
+        phone: formData.phone ? formData.phone.trim() : "", // Rendre le téléphone optionnel
         address: formData.address.trim(),
       }
 
-      // Vérifier les champs de contact
+      // Vérifier les champs de contact obligatoires (sans le téléphone)
       if (!cleanedFormData.firstName || !cleanedFormData.lastName || !cleanedFormData.email) {
         throw new Error("Veuillez remplir tous les champs obligatoires (prénom, nom et email)")
       }
 
-      // Vérifier que l'email est valide avec une regex plus permissive
+      // Vérifier que l'email est valide
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
       if (!emailRegex.test(cleanedFormData.email)) {
         throw new Error("L'adresse email n'est pas valide")
@@ -603,7 +631,7 @@ export default function PtzCalculator() {
     } catch (error) {
       console.error("Erreur lors du calcul d'éligibilité:", error)
       setSubmissionError(
-        "Une erreur est survenue lors du calcul. Veuillez réessayer ultérieurement."
+        error instanceof Error ? error.message : "Une erreur est survenue lors du calcul. Veuillez réessayer ultérieurement."
       )
     } finally {
       setIsSubmitting(false)
@@ -837,8 +865,9 @@ export default function PtzCalculator() {
                     value={formData.monthlyIncome || ""}
                     onChange={(e) => {
                       const monthlyIncome = e.target.value;
-                      // Calculer le revenu fiscal de référence (mensuel x 12)
-                      const annualIncome = monthlyIncome ? (Number(monthlyIncome) * 12).toString() : "";
+                      // Calculer le revenu fiscal de référence (mensuel x 12) avec abattement de 10%
+                      const annualIncome = monthlyIncome ? 
+                        (Math.round(Number(monthlyIncome) * 12 * 0.9)).toString() : "";
                       handleInputChange("income", annualIncome);
                       handleInputChange("monthlyIncome", monthlyIncome);
                     }}
@@ -847,7 +876,7 @@ export default function PtzCalculator() {
                   <Euro className="absolute left-3 top-3.5 h-5 w-5 text-gray-400" />
                 </div>
                 <div className="mt-2 text-sm text-gray-500">
-                  Le revenu fiscal de référence sera calculé automatiquement (mensuel x 12).
+                  Le revenu fiscal de référence sera calculé automatiquement (mensuel x 12 avec abattement de 10%).
                   {formData.monthlyIncome && (
                     <div className="mt-4 p-3 bg-green-50 rounded-lg">
                       <p className="font-medium text-green-800">Revenu fiscal de référence calculé :</p>
@@ -855,7 +884,7 @@ export default function PtzCalculator() {
                         {Number(formData.income).toLocaleString()} €
                       </p>
                       <p className="text-xs text-green-700 mt-1">
-                        (Revenu mensuel x 12)
+                        (Revenu mensuel x 12 avec abattement de 10%)
                       </p>
                     </div>
                   )}
@@ -944,16 +973,23 @@ export default function PtzCalculator() {
                 <div className="relative">
                   <Input
                     id="projectCost"
-                    type="number"
-                    placeholder="Ex: 200000"
-                    value={formData.projectCost}
-                    onChange={(e) => handleInputChange("projectCost", e.target.value)}
+                    type="text"
+                    placeholder="Ex: 200 000"
+                    value={formData.projectCost ? Number(formData.projectCost).toLocaleString('fr-FR').replace(',', ' ') : ''}
+                    onChange={(e) => {
+                      const value = e.target.value.replace(/\s/g, '');
+                      const numericValue = Number(value);
+                      if (!isNaN(numericValue) && numericValue <= 2000000) {
+                        handleInputChange("projectCost", value);
+                      }
+                    }}
                     className="h-12 pl-10"
+                    maxLength={9}
                   />
                   <Euro className="absolute left-3 top-3.5 h-5 w-5 text-gray-400" />
                 </div>
                 <div className="mt-2 text-sm text-gray-500">
-                  Incluez le prix d'achat et les éventuels travaux prévus.
+                  Incluez le prix d'achat et les éventuels travaux prévus (maximum 2 000 000 €).
                 </div>
               </div>
             </CardContent>
@@ -981,9 +1017,12 @@ export default function PtzCalculator() {
                       placeholder="Votre prénom"
                       value={formData.firstName}
                       onChange={(e) => handleInputChange("firstName", e.target.value)}
-                      className="h-12"
+                      className={formErrors.firstName ? "border-red-500" : ""}
                       required
                     />
+                    {formErrors.firstName && (
+                      <p className="text-red-500 text-sm mt-1">{formErrors.firstName}</p>
+                    )}
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="lastName">Nom *</Label>
@@ -992,9 +1031,12 @@ export default function PtzCalculator() {
                       placeholder="Votre nom"
                       value={formData.lastName}
                       onChange={(e) => handleInputChange("lastName", e.target.value)}
-                      className="h-12"
+                      className={formErrors.lastName ? "border-red-500" : ""}
                       required
                     />
+                    {formErrors.lastName && (
+                      <p className="text-red-500 text-sm mt-1">{formErrors.lastName}</p>
+                    )}
                   </div>
                 </div>
                 <div className="space-y-2">
@@ -1005,12 +1047,15 @@ export default function PtzCalculator() {
                     placeholder="votre.email@exemple.com"
                     value={formData.email}
                     onChange={(e) => handleInputChange("email", e.target.value)}
-                    className="h-12"
+                    className={formErrors.email ? "border-red-500" : ""}
                     required
                   />
+                  {formErrors.email && (
+                    <p className="text-red-500 text-sm mt-1">{formErrors.email}</p>
+                  )}
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="phone">Téléphone</Label>
+                  <Label htmlFor="phone">Téléphone (optionnel)</Label>
                   <Input
                     id="phone"
                     type="tel"
@@ -1024,7 +1069,7 @@ export default function PtzCalculator() {
                   <p className="font-medium mb-1">Pourquoi demandons-nous ces informations ?</p>
                   <p>
                     Ces informations nous permettent de vous contacter pour vous accompagner dans votre projet et vous
-                    proposer des solutions adaptées à votre situation.
+                    proposer des solutions adaptées à votre situation. Les champs marqués d'un * sont obligatoires.
                   </p>
                 </div>
               </div>
