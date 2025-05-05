@@ -79,7 +79,6 @@ export default function Admin() {
   };
 
   const fetchSubmissions = async () => {
-    setLoading(true);
     try {
       const response = await fetch('/api/sheets', {
         cache: 'no-store',
@@ -93,16 +92,21 @@ export default function Admin() {
         throw new Error(`Erreur HTTP: ${response.status}`);
       }
       const data = await response.json();
-      console.log('Données reçues:', data); // Pour le débogage
+      console.log('Données reçues:', data);
       if (!data.submissions || !Array.isArray(data.submissions)) {
         throw new Error('Format de données invalide');
       }
-      setSubmissions(data.submissions);
+      // Comparer les nouvelles données avec les anciennes
+      const newSubmissionsString = JSON.stringify(data.submissions);
+      const currentSubmissionsString = JSON.stringify(submissions);
+      
+      // Ne mettre à jour que si les données ont changé
+      if (newSubmissionsString !== currentSubmissionsString) {
+        setSubmissions(data.submissions);
+      }
     } catch (err) {
       setError('Erreur lors de la récupération des données');
       console.error('Erreur:', err);
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -110,7 +114,8 @@ export default function Admin() {
   useEffect(() => {
     if (isAuthenticated) {
       fetchSubmissions();
-      const interval = setInterval(fetchSubmissions, 30000); // Rafraîchir toutes les 30 secondes
+      // Rafraîchir toutes les 2 minutes au lieu de 30 secondes
+      const interval = setInterval(fetchSubmissions, 120000);
       return () => clearInterval(interval);
     }
   }, [isAuthenticated]);
