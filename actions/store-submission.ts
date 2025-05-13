@@ -2,6 +2,7 @@
 
 import fs from "fs"
 import path from "path"
+import os from "os"
 import { sendEmail, generatePTZConfirmationEmail } from "@/src/utils/emailService"
 
 type SubmissionData = {
@@ -25,42 +26,106 @@ type SubmissionData = {
 
 // Chemin vers le fichier JSON local pour stocker les données
 const DATA_FILE_PATH = path.join(process.cwd(), "data", "submissions.json")
+// Chemin alternatif utilisant le répertoire temporaire du système
+const TEMP_DATA_FILE_PATH = path.join(os.tmpdir(), "ptz_geoterre_submissions.json")
 
 // Fonction pour s'assurer que le répertoire de données existe
 function ensureDataDirectory() {
+  console.log('Création/vérification du répertoire de données...')
+  console.log('Chemin courant:', process.cwd())
+  console.log('Chemin complet du fichier:', DATA_FILE_PATH)
+  
+  // Tentative d'utiliser le répertoire de données standard
+  let useStandardPath = true
   const dataDir = path.join(process.cwd(), "data")
+  
   if (!fs.existsSync(dataDir)) {
-    fs.mkdirSync(dataDir, { recursive: true })
+    console.log('Le répertoire data n\'existe pas, tentative de création...')
+    try {
+      fs.mkdirSync(dataDir, { recursive: true })
+      console.log('Répertoire data créé avec succès')
+    } catch (error) {
+      console.error('Erreur lors de la création du répertoire data:', error)
+      console.log('Utilisation du répertoire temporaire comme alternative')
+      useStandardPath = false
+    }
+  } else {
+    console.log('Le répertoire data existe déjà')
+    
+    // Vérifier si le répertoire est accessible en écriture
+    try {
+      fs.accessSync(dataDir, fs.constants.W_OK)
+      console.log('Le répertoire data est accessible en écriture')
+    } catch (error) {
+      console.error('Le répertoire data n\'est pas accessible en écriture:', error)
+      console.log('Utilisation du répertoire temporaire comme alternative')
+      useStandardPath = false
+    }
   }
 
+  // Si le chemin standard n'est pas utilisable, utiliser le répertoire temporaire
+  const currentPath = useStandardPath ? DATA_FILE_PATH : TEMP_DATA_FILE_PATH
+  console.log('Chemin final utilisé:', currentPath)
+
   // Créer un fichier vide s'il n'existe pas
-  if (!fs.existsSync(DATA_FILE_PATH)) {
-    fs.writeFileSync(DATA_FILE_PATH, JSON.stringify([]))
+  if (!fs.existsSync(currentPath)) {
+    console.log(`Le fichier ${path.basename(currentPath)} n'existe pas, tentative de création...`)
+    try {
+      fs.writeFileSync(currentPath, JSON.stringify([]))
+      console.log(`Fichier ${path.basename(currentPath)} créé avec succès`)
+    } catch (error) {
+      console.error(`Erreur lors de la création du fichier ${path.basename(currentPath)}:`, error)
+      throw new Error(`Impossible de créer le fichier ${path.basename(currentPath)}: ${error instanceof Error ? error.message : 'Erreur inconnue'}`)
+    }
+  } else {
+    console.log(`Le fichier ${path.basename(currentPath)} existe déjà`)
+    
+    // Vérifier si le fichier est accessible en écriture
+    try {
+      fs.accessSync(currentPath, fs.constants.W_OK)
+      console.log(`Le fichier ${path.basename(currentPath)} est accessible en écriture`)
+    } catch (error) {
+      console.error(`Le fichier ${path.basename(currentPath)} n'est pas accessible en écriture:`, error)
+      throw new Error(`Le fichier ${path.basename(currentPath)} n'est pas accessible en écriture: ${error instanceof Error ? error.message : 'Erreur inconnue'}`)
+    }
   }
+  
+  return currentPath
 }
 
 // Fonction pour lire les données existantes
 function readSubmissions(): any[] {
-  ensureDataDirectory()
+  const filePath = ensureDataDirectory()
   try {
-    const data = fs.readFileSync(DATA_FILE_PATH, "utf8")
-    return JSON.parse(data)
+    console.log(`Lecture du fichier ${path.basename(filePath)}...`)
+    const data = fs.readFileSync(filePath, "utf8")
+    const parsedData = JSON.parse(data)
+    console.log(`Fichier lu avec succès, contient ${parsedData.length} entrées`)
+    return parsedData
   } catch (error) {
     console.error("Erreur lors de la lecture des données:", error)
-    return []
+    throw new Error(`Erreur lors de la lecture des données: ${error instanceof Error ? error.message : 'Erreur inconnue'}`)
   }
 }
 
 // Fonction pour écrire les données
 function writeSubmissions(submissions: any[]) {
-  ensureDataDirectory()
-  fs.writeFileSync(DATA_FILE_PATH, JSON.stringify(submissions, null, 2))
+  const filePath = ensureDataDirectory()
+  try {
+    console.log(`Écriture de ${submissions.length} entrées dans le fichier ${path.basename(filePath)}...`)
+    fs.writeFileSync(filePath, JSON.stringify(submissions, null, 2))
+    console.log('Données écrites avec succès')
+  } catch (error) {
+    console.error("Erreur lors de l'écriture des données:", error)
+    throw new Error(`Erreur lors de l'écriture des données: ${error instanceof Error ? error.message : 'Erreur inconnue'}`)
+  }
 }
 
 export async function storeSubmission(data: SubmissionData) {
   try {
     console.log('Tentative d\'enregistrement des données...');
     console.log('Données reçues:', data);
+    console.log('Environnement:', process.env.NODE_ENV);
     
     // Lire les données existantes
     const submissions = readSubmissions()
@@ -97,39 +162,8 @@ export async function storeSubmission(data: SubmissionData) {
       // Ne pas faire échouer la soumission si l'envoi d'email échoue
     }
     
-    // Envoyer à Google Sheets en utilisant une API externe
-    try {
-      // Appel à l'API fetch pour envoyer les données à un service externe qui gère Google Sheets
-      const response = await fetch("https://docs.google.com/spreadsheets/d/1Fr4gwXZjeBvOtsOVpqPuzkOSdGC5OcEEBgT8IeMDIRQ/edit?resourcekey#gid=860741683", {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          firstName: data.firstName,
-          lastName: data.lastName,
-          email: data.email,
-          phone: data.phone,
-          householdSize: data.householdSize,
-          zone: data.zone,
-          address: data.address,
-          income: data.income,
-          housingType: data.housingType,
-          projectCost: data.projectCost,
-          eligible: data.eligible,
-          tranche: data.tranche,
-          quotity: data.quotity,
-          ptzAmount: data.ptzAmount,
-          reason: data.reason,
-          submissionDate: new Date().toLocaleString("fr-FR"),
-        }),
-      });
-      
-      console.log('Réponse de la requête:', response.status);
-    } catch (sheetError) {
-      // Ne pas échouer complètement si l'envoi à Google Sheets échoue
-      console.error('Erreur lors de l\'envoi à Google Sheets:', sheetError);
-    }
+    // NOTE: Suppression de la tentative d'envoi à Google Sheets via fetch
+    // Cette méthode ne fonctionne pas car l'URL n'est pas une API
 
     return { success: true }
   } catch (error) {
