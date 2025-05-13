@@ -35,74 +35,44 @@ function isAuthenticated(request: NextRequest): boolean {
   return false;
 }
 
-// Fonction pour s'assurer que le répertoire de données existe
-function ensureDataDirectory() {
-  console.log('CSV - Création/vérification du répertoire de données...')
-  console.log('CSV - Chemin courant:', process.cwd())
-  console.log('CSV - Chemin complet du fichier:', DATA_FILE_PATH)
-  
-  // Tentative d'utiliser le répertoire de données standard
-  let useStandardPath = true
-  const dataDir = path.join(process.cwd(), "data");
-  
-  if (!fs.existsSync(dataDir)) {
-    console.log('CSV - Le répertoire data n\'existe pas, tentative de création...')
-    try {
-      fs.mkdirSync(dataDir, { recursive: true });
-      console.log('CSV - Répertoire data créé avec succès')
-    } catch (error) {
-      console.error('CSV - Erreur lors de la création du répertoire data:', error);
-      console.log('CSV - Utilisation du répertoire temporaire comme alternative')
-      useStandardPath = false
-    }
-  } else {
-    console.log('CSV - Le répertoire data existe déjà')
-    
-    // Vérifier si le répertoire est accessible en écriture
-    try {
-      fs.accessSync(dataDir, fs.constants.W_OK)
-      console.log('CSV - Le répertoire data est accessible en écriture')
-    } catch (error) {
-      console.error('CSV - Le répertoire data n\'est pas accessible en écriture:', error)
-      console.log('CSV - Utilisation du répertoire temporaire comme alternative')
-      useStandardPath = false
-    }
-  }
-
-  // Si le chemin standard n'est pas utilisable, utiliser le répertoire temporaire
-  const currentPath = useStandardPath ? DATA_FILE_PATH : TEMP_DATA_FILE_PATH
-  console.log('CSV - Chemin final utilisé:', currentPath)
-
-  // Créer un fichier vide s'il n'existe pas
-  if (!fs.existsSync(currentPath)) {
-    console.log(`CSV - Le fichier ${path.basename(currentPath)} n'existe pas, tentative de création...`)
-    try {
-      fs.writeFileSync(currentPath, JSON.stringify([]));
-      console.log(`CSV - Fichier ${path.basename(currentPath)} créé avec succès`)
-    } catch (error) {
-      console.error(`CSV - Erreur lors de la création du fichier ${path.basename(currentPath)}:`, error);
-      throw new Error(`CSV - Impossible de créer le fichier ${path.basename(currentPath)}: ${error instanceof Error ? error.message : 'Erreur inconnue'}`);
-    }
-  } else {
-    console.log(`CSV - Le fichier ${path.basename(currentPath)} existe déjà`)
-  }
-  
-  return currentPath;
-}
-
-// Fonction pour lire les données existantes
-function readSubmissions(): any[] {
-  const filePath = ensureDataDirectory();
-  try {
-    console.log(`CSV - Lecture du fichier ${path.basename(filePath)}...`)
-    const data = fs.readFileSync(filePath, "utf8");
-    const parsedData = JSON.parse(data);
-    console.log(`CSV - Fichier lu avec succès, contient ${parsedData.length} entrées`)
-    return parsedData;
-  } catch (error) {
-    console.error("CSV - Erreur lors de la lecture des données:", error);
+// Fonction pour lire les données d'un fichier spécifique
+function readSubmissionsFromFile(filePath: string): any[] {
+  if (!fs.existsSync(filePath)) {
+    console.log(`CSV - Le fichier ${filePath} n'existe pas`);
     return [];
   }
+
+  try {
+    console.log(`CSV - Lecture du fichier ${path.basename(filePath)}...`);
+    const data = fs.readFileSync(filePath, "utf8");
+    const parsedData = JSON.parse(data);
+    console.log(`CSV - Fichier ${path.basename(filePath)} lu avec succès, contient ${parsedData.length} entrées`);
+    return parsedData;
+  } catch (error) {
+    console.error(`CSV - Erreur lors de la lecture des données depuis ${path.basename(filePath)}:`, error);
+    return [];
+  }
+}
+
+// Fonction pour lire toutes les données disponibles
+function readSubmissions(): any[] {
+  // Tenter de lire à partir des deux emplacements
+  const standardSubmissions = readSubmissionsFromFile(DATA_FILE_PATH);
+  const tempSubmissions = readSubmissionsFromFile(TEMP_DATA_FILE_PATH);
+  
+  // Combiner les résultats
+  const allSubmissions = [...standardSubmissions, ...tempSubmissions];
+  
+  // Trier par date de soumission (du plus récent au plus ancien)
+  allSubmissions.sort((a, b) => {
+    const dateA = new Date(a.submissionDate?.replace(/(\d+)\/(\d+)\/(\d+)/, '$3-$2-$1') || 0);
+    const dateB = new Date(b.submissionDate?.replace(/(\d+)\/(\d+)\/(\d+)/, '$3-$2-$1') || 0);
+    return dateB.getTime() - dateA.getTime();
+  });
+  
+  console.log(`CSV - Total des entrées combinées: ${allSubmissions.length}`);
+  
+  return allSubmissions;
 }
 
 export async function GET(request: NextRequest) {

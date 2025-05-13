@@ -66,18 +66,69 @@ function ensureDataDirectory() {
   return currentPath;
 }
 
-// Fonction pour lire les données existantes
-function readSubmissions(): any[] {
-  const filePath = ensureDataDirectory();
+// Fonction pour lire les données d'un fichier spécifique
+function readSubmissionsFromFile(filePath: string): any[] {
+  if (!fs.existsSync(filePath)) {
+    console.log(`API - Le fichier ${filePath} n'existe pas`);
+    return [];
+  }
+
   try {
-    console.log(`API - Lecture du fichier ${path.basename(filePath)}...`)
+    console.log(`API - Lecture du fichier ${path.basename(filePath)}...`);
     const data = fs.readFileSync(filePath, "utf8");
     const parsedData = JSON.parse(data);
-    console.log(`API - Fichier lu avec succès, contient ${parsedData.length} entrées`)
+    console.log(`API - Fichier ${path.basename(filePath)} lu avec succès, contient ${parsedData.length} entrées`);
     return parsedData;
   } catch (error) {
-    console.error("API - Erreur lors de la lecture des données:", error);
+    console.error(`API - Erreur lors de la lecture des données depuis ${path.basename(filePath)}:`, error);
     return [];
+  }
+}
+
+// Fonction pour lire toutes les données disponibles
+function readSubmissions(): any[] {
+  // Tenter de lire à partir des deux emplacements
+  const standardSubmissions = readSubmissionsFromFile(DATA_FILE_PATH);
+  const tempSubmissions = readSubmissionsFromFile(TEMP_DATA_FILE_PATH);
+  
+  // Combiner les résultats
+  const allSubmissions = [...standardSubmissions, ...tempSubmissions];
+  
+  // Trier par date de soumission (du plus récent au plus ancien)
+  allSubmissions.sort((a, b) => {
+    const dateA = new Date(a.submissionDate?.replace(/(\d+)\/(\d+)\/(\d+)/, '$3-$2-$1') || 0);
+    const dateB = new Date(b.submissionDate?.replace(/(\d+)\/(\d+)\/(\d+)/, '$3-$2-$1') || 0);
+    return dateB.getTime() - dateA.getTime();
+  });
+  
+  console.log(`API - Total des entrées combinées: ${allSubmissions.length}`);
+  
+  return allSubmissions;
+}
+
+// Fonction pour écrire les données
+function writeSubmissions(submissions: any[]) {
+  try {
+    // Tenter d'écrire dans le répertoire standard d'abord
+    const dataDir = path.join(process.cwd(), "data");
+    if (fs.existsSync(dataDir) && fs.accessSync(dataDir, fs.constants.W_OK) === undefined) {
+      console.log(`API - Écriture de ${submissions.length} entrées dans ${DATA_FILE_PATH}...`);
+      fs.writeFileSync(DATA_FILE_PATH, JSON.stringify(submissions, null, 2));
+      console.log('API - Données écrites avec succès dans le répertoire standard');
+      return;
+    }
+  } catch (error) {
+    console.error('API - Erreur lors de l\'écriture dans le répertoire standard:', error);
+  }
+  
+  // Si l'écriture dans le répertoire standard échoue, utiliser le répertoire temporaire
+  try {
+    console.log(`API - Écriture de ${submissions.length} entrées dans ${TEMP_DATA_FILE_PATH}...`);
+    fs.writeFileSync(TEMP_DATA_FILE_PATH, JSON.stringify(submissions, null, 2));
+    console.log('API - Données écrites avec succès dans le répertoire temporaire');
+  } catch (error) {
+    console.error('API - Erreur lors de l\'écriture dans le répertoire temporaire:', error);
+    throw new Error(`API - Impossible d'écrire les données: ${error instanceof Error ? error.message : 'Erreur inconnue'}`);
   }
 }
 
@@ -133,10 +184,7 @@ export async function POST(request: NextRequest) {
     const { submissions } = await request.json();
     
     // Écrire les nouvelles soumissions dans le fichier
-    const filePath = ensureDataDirectory();
-    console.log(`API - Écriture de ${submissions.length} entrées dans le fichier ${path.basename(filePath)}...`);
-    fs.writeFileSync(filePath, JSON.stringify(submissions, null, 2));
-    console.log('API - Données écrites avec succès');
+    writeSubmissions(submissions);
     
     return NextResponse.json({ success: true });
   } catch (error) {
