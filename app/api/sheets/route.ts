@@ -276,11 +276,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  // Vérifier l'authentification
-  if (!isAuthenticated(request)) {
-    return NextResponse.json({ error: 'Non autorisé' }, { status: 401 });
-  }
-
+  // Suppression de la vérification d'authentification pour le POST public
   try {
     const { submissions } = await request.json();
     // Pour chaque soumission, ajoute la date si absente
