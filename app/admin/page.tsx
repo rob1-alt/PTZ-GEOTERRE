@@ -42,6 +42,8 @@ function saveSubmissionsToLocalStorage(submissions: Submission[]): void {
   }
 }
 
+
+
 function getSubmissionsFromLocalStorage(): Submission[] {
   try {
     if (typeof window !== 'undefined') {
