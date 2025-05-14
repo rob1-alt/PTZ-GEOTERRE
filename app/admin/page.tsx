@@ -29,6 +29,32 @@ type Submission = {
   notOwnerForTwoYears: boolean;
 };
 
+// Fonctions pour la gestion du localStorage
+const LOCAL_STORAGE_KEY = 'ptz_geoterre_temp_submissions';
+
+function saveSubmissionsToLocalStorage(submissions: Submission[]): void {
+  try {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(submissions));
+    }
+  } catch (error) {
+    console.error('Erreur lors de la sauvegarde dans localStorage:', error);
+  }
+}
+
+function getSubmissionsFromLocalStorage(): Submission[] {
+  try {
+    if (typeof window !== 'undefined') {
+      const data = localStorage.getItem(LOCAL_STORAGE_KEY);
+      return data ? JSON.parse(data) : [];
+    }
+    return [];
+  } catch (error) {
+    console.error('Erreur lors de la lecture depuis localStorage:', error);
+    return [];
+  }
+}
+
 export default function Admin() {
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [selectedSubmissions, setSelectedSubmissions] = useState<number[]>([]);
@@ -38,16 +64,83 @@ export default function Admin() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [authError, setAuthError] = useState<string | null>(null);
+  const [serverDataLoaded, setServerDataLoaded] = useState(false);
 
   // Informations d'authentification
   const ADMIN_USERNAME = 'geoterre';
   const ADMIN_PASSWORD = 'q4T52k6EqufC3Q';
+
+  // Fonction pour combiner les données du serveur et du localStorage
+  const mergeSortSubmissions = (serverData: Submission[], localData: Submission[]): Submission[] => {
+    // Utiliser une Map pour identifier les doublons basés sur la combinaison des champs uniques
+    const uniqueSubmissions = new Map();
+    
+    // Fonction pour créer une clé unique pour chaque soumission
+    const getSubmissionKey = (submission: Submission) => {
+      // Créer une clé basée sur les champs qui devraient être uniques
+      if (submission.submissionDate) {
+        return `${submission.submissionDate}_${submission.email}_${submission.firstName}_${submission.lastName}`;
+      }
+      // Sinon, utilisons juste l'email et le nom/prénom
+      return `${submission.email}_${submission.firstName}_${submission.lastName}`;
+    };
+
+    // Ajouter les données du serveur d'abord (priorité plus basse)
+    serverData.forEach(submission => {
+      const key = getSubmissionKey(submission);
+      uniqueSubmissions.set(key, submission);
+    });
+
+    // Ajouter ensuite les données locales (priorité plus haute, car potentiellement plus récentes)
+    localData.forEach(submission => {
+      const key = getSubmissionKey(submission);
+      uniqueSubmissions.set(key, submission);
+    });
+
+    // Convertir la Map en tableau
+    const allSubmissions = Array.from(uniqueSubmissions.values()) as Submission[];
+    
+    // Trier par date de soumission (du plus récent au plus ancien)
+    allSubmissions.sort((a, b) => {
+      // Fonction pour convertir une date française en objet Date
+      const parseFrenchDate = (dateStr: string) => {
+        if (!dateStr) return new Date(0);
+        // Format DD/MM/YYYY HH:mm:ss
+        const [datePart, timePart] = dateStr.split(' ');
+        if (!datePart) return new Date(0);
+        
+        const [day, month, year] = datePart.split('/').map(Number);
+        if (!year || !month || !day) return new Date(0);
+        
+        if (timePart) {
+          const [hours, minutes, seconds] = timePart.split(':').map(Number);
+          return new Date(year, month - 1, day, hours || 0, minutes || 0, seconds || 0);
+        }
+        
+        return new Date(year, month - 1, day);
+      };
+      
+      const dateA = parseFrenchDate(a.submissionDate);
+      const dateB = parseFrenchDate(b.submissionDate);
+      
+      return dateB.getTime() - dateA.getTime();
+    });
+    
+    return allSubmissions;
+  };
 
   useEffect(() => {
     const checkAuth = () => {
       const savedAuth = Cookies.get('ptz_admin_auth');
       if (savedAuth === 'true') {
         setIsAuthenticated(true);
+        // Charger d'abord les données du localStorage
+        const localSubmissions = getSubmissionsFromLocalStorage();
+        if (localSubmissions.length > 0) {
+          setSubmissions(localSubmissions);
+          setLoading(false);
+        }
+        // Ensuite, essayer de récupérer les données du serveur
         fetchSubmissions();
       } else {
         setLoading(false);
@@ -66,6 +159,13 @@ export default function Admin() {
       setIsAuthenticated(true);
       // Définir un cookie qui expire dans 24 heures
       Cookies.set('ptz_admin_auth', 'true', { expires: 1 });
+      // Charger d'abord les données du localStorage
+      const localSubmissions = getSubmissionsFromLocalStorage();
+      if (localSubmissions.length > 0) {
+        setSubmissions(localSubmissions);
+        setLoading(false);
+      }
+      // Ensuite, essayer de récupérer les données du serveur
       fetchSubmissions();
     } else {
       setAuthError('Identifiants incorrects. Veuillez réessayer.');
@@ -100,19 +200,53 @@ export default function Admin() {
       }
       
       const data = await response.json();
-      console.log('Données reçues:', data);
+      console.log('Données reçues du serveur:', data);
       
       if (!data.submissions || !Array.isArray(data.submissions)) {
         throw new Error('Format de données invalide');
       }
       
-      setSubmissions(data.submissions);
+      // Récupérer les données du localStorage pour les combiner avec celles du serveur
+      const localSubmissions = getSubmissionsFromLocalStorage();
+      
+      // Fusionner et trier les données
+      const mergedSubmissions = mergeSortSubmissions(data.submissions, localSubmissions);
+      
+      // Mettre à jour l'état et le localStorage avec les données combinées
+      setSubmissions(mergedSubmissions);
+      saveSubmissionsToLocalStorage(mergedSubmissions);
+      setServerDataLoaded(true);
       setLoading(false);
+      
+      console.log(`Nombre total d'entrées après fusion: ${mergedSubmissions.length}`);
+      if (mergedSubmissions.length > 0) {
+        console.log('Premières entrées après fusion:');
+        mergedSubmissions.slice(0, 3).forEach((sub, i) => {
+          console.log(`${i + 1}: ${sub.submissionDate} - ${sub.firstName} ${sub.lastName}`);
+        });
+      }
+      
     } catch (err) {
-      console.error('Erreur:', err);
-      setError('Erreur lors de la récupération des données: ' + (err instanceof Error ? err.message : String(err)));
+      console.error('Erreur lors de la récupération des données du serveur:', err);
+      setError('Erreur lors de la récupération des données du serveur. Affichage des données en cache local.');
+      
+      // En cas d'échec, utiliser uniquement les données du localStorage
+      const localSubmissions = getSubmissionsFromLocalStorage();
+      if (localSubmissions.length > 0) {
+        console.log(`Utilisation de ${localSubmissions.length} entrées du cache local`);
+        setSubmissions(localSubmissions);
+      }
+      
       setLoading(false);
     }
+  };
+
+  // Fonction pour enregistrer une nouvelle soumission dans le localStorage
+  const addLocalSubmission = (submission: Submission) => {
+    const currentSubmissions = getSubmissionsFromLocalStorage();
+    const newSubmissions = [submission, ...currentSubmissions];
+    saveSubmissionsToLocalStorage(newSubmissions);
+    setSubmissions(mergeSortSubmissions(submissions, [submission]));
   };
 
   // Ajouter un intervalle de rafraîchissement
@@ -140,7 +274,13 @@ export default function Admin() {
           })
           .then(data => {
             if (data.submissions && Array.isArray(data.submissions)) {
-              setSubmissions(data.submissions);
+              // Fusionner avec les données du localStorage
+              const localSubmissions = getSubmissionsFromLocalStorage();
+              const mergedSubmissions = mergeSortSubmissions(data.submissions, localSubmissions);
+              
+              setSubmissions(mergedSubmissions);
+              saveSubmissionsToLocalStorage(mergedSubmissions);
+              setServerDataLoaded(true);
             }
           })
           .catch(err => {
@@ -197,22 +337,46 @@ export default function Admin() {
       const updatedSubmissions = submissions.filter((_, index) => !selectedSubmissions.includes(index));
       setSubmissions(updatedSubmissions);
       setSelectedSubmissions([]);
+      
+      // Mettre à jour le localStorage
+      saveSubmissionsToLocalStorage(updatedSubmissions);
 
-      // Sauvegarder les modifications
-      const response = await fetch('/api/sheets', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ submissions: updatedSubmissions }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Erreur lors de la sauvegarde des modifications');
+      // Tenter également de sauvegarder les modifications sur le serveur
+      try {
+        // Sauvegarder les modifications
+        const response = await fetch('/api/sheets', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ submissions: updatedSubmissions }),
+        });
+  
+        if (!response.ok) {
+          console.warn('Avertissement: Les modifications ont été appliquées localement mais pas sur le serveur');
+        }
+      } catch (serverError) {
+        console.warn('Avertissement: Les modifications ont été appliquées localement mais pas sur le serveur:', serverError);
       }
     } catch (error) {
       console.error('Erreur:', error);
       setError('Erreur lors de l\'annulation des soumissions');
+    }
+  };
+
+  // Ajouter un gestionnaire de diagnostic
+  const runDiagnostic = async () => {
+    try {
+      const response = await fetch('/api/debug');
+      if (!response.ok) {
+        throw new Error(`Erreur HTTP: ${response.status}`);
+      }
+      const data = await response.json();
+      console.log('Diagnostic:', data);
+      alert('Diagnostic terminé. Vérifiez la console pour les résultats.');
+    } catch (err) {
+      console.error('Erreur de diagnostic:', err);
+      alert('Erreur lors du diagnostic. Vérifiez la console.');
     }
   };
 
@@ -271,11 +435,21 @@ export default function Admin() {
             <CardTitle>Administration PTZ Calculator</CardTitle>
             <CardDescription>
               Consultez toutes les demandes de simulation PTZ soumises
+              {!serverDataLoaded && submissions.length > 0 && (
+                <span className="ml-2 text-amber-500 font-medium text-sm">
+                  (Données locales uniquement)
+                </span>
+              )}
             </CardDescription>
           </div>
-          <Button variant="outline" onClick={handleLogout}>
-            Déconnexion
-          </Button>
+          <div className="flex space-x-2">
+            <Button variant="outline" size="sm" onClick={runDiagnostic}>
+              Diagnostic
+            </Button>
+            <Button variant="outline" onClick={handleLogout}>
+              Déconnexion
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           <div className="mb-6 flex gap-4">
@@ -295,7 +469,12 @@ export default function Admin() {
           {loading ? (
             <div className="text-center py-10">Chargement des données...</div>
           ) : error ? (
-            <div className="text-center py-10 text-red-500">{error}</div>
+            <div className="text-center py-10">
+              <p className="text-amber-600 mb-2">{error}</p>
+              {submissions.length > 0 && (
+                <p className="text-sm text-gray-600">Affichage de {submissions.length} soumissions depuis le cache local</p>
+              )}
+            </div>
           ) : submissions.length === 0 ? (
             <div className="text-center py-10">Aucune soumission trouvée</div>
           ) : (
