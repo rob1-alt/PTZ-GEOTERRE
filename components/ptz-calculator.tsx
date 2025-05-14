@@ -30,7 +30,6 @@ import {
 } from "lucide-react"
 import { BankPartners } from "./bank-partners"
 import Image from "next/image"
-import { storeSubmission } from "@/actions/store-submission"
 import { CommuneSearch } from "@/components/commune-search"
 import { type Commune, loadCommunes } from "@/lib/communes"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
@@ -609,10 +608,23 @@ export default function PtzCalculator() {
         ...calculationResult
       };
 
-      const response = await storeSubmission(submissionData);
-      
-      if (!response.success) {
-        throw new Error(response.error || "Erreur lors de l'enregistrement des données");
+      // Remplacement de l'appel direct à storeSubmission par un appel API
+      const response = await fetch('/api/sheets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ submissions: [submissionData] })
+      });
+      const result = await response.json();
+      if (!result.success) {
+        throw new Error(result.error || "Erreur lors de l'enregistrement des données");
+      }
+      // Mettre à jour le localStorage avec la vraie soumission (timestamp inclus)
+      if (typeof window !== 'undefined' && result.savedSubmission) {
+        const localKey = 'ptz_geoterre_temp_submissions';
+        const current = JSON.parse(localStorage.getItem(localKey) || '[]');
+        localStorage.setItem(localKey, JSON.stringify([result.savedSubmission, ...current]));
+        // Notifier l'admin d'une nouvelle soumission
+        window.dispatchEvent(new Event('ptzSubmissionAdded'));
       }
 
     } catch (error) {

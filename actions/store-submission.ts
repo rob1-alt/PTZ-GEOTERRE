@@ -22,6 +22,7 @@ type SubmissionData = {
   ptzAmount?: number
   reason?: string
   notOwnerForTwoYears: boolean
+  selectedCommune?: { commune: string }
 }
 
 // Chemin vers le fichier JSON local pour stocker les données
@@ -304,6 +305,7 @@ export async function exportSubmissionsToCSV() {
       "phone",
       "zone",
       "address",
+      "selectedCommune",
       "housingType",
       "householdSize",
       "income",
@@ -324,6 +326,7 @@ export async function exportSubmissionsToCSV() {
       "Téléphone",
       "Zone",
       "Adresse",
+      "Lieu de recherche",
       "Type de logement",
       "Taille du foyer",
       "Revenu",
@@ -340,6 +343,9 @@ export async function exportSubmissionsToCSV() {
       .map((submission) => {
         return columns
           .map((column) => {
+            if (column === "selectedCommune") {
+              return submission.selectedCommune?.commune ? `"${submission.selectedCommune.commune.replace(/"/g, '""')}"` : '';
+            }
             const value = submission[column]
             if (value === undefined || value === null) {
               return ""

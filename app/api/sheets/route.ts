@@ -283,11 +283,15 @@ export async function POST(request: NextRequest) {
 
   try {
     const { submissions } = await request.json();
-    
-    // Écrire les nouvelles soumissions dans le fichier
-    writeSubmissions(submissions);
-    
-    return NextResponse.json({ success: true });
+    // Pour chaque soumission, ajoute la date si absente
+    const submissionsWithDate = (submissions as any[]).map((sub: any) => ({
+      ...sub,
+      submissionDate: sub.submissionDate || new Date().toLocaleString('fr-FR')
+    }));
+    writeSubmissions(submissionsWithDate);
+    // Renvoyer la soumission effectivement enregistrée (la plus récente)
+    const savedSubmission = submissionsWithDate[0];
+    return NextResponse.json({ success: true, savedSubmission });
   } catch (error) {
     console.error('API - Erreur lors de la sauvegarde des données:', error);
     return NextResponse.json({ 

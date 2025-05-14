@@ -27,6 +27,7 @@ type Submission = {
   ptzAmount?: number;
   reason?: string;
   notOwnerForTwoYears: boolean;
+  selectedCommune?: { commune: string };
 };
 
 // Fonctions pour la gestion du localStorage
@@ -382,6 +383,16 @@ export default function Admin() {
     }
   };
 
+  useEffect(() => {
+    const handleSubmissionAdded = () => {
+      fetchSubmissions();
+    };
+    window.addEventListener('ptzSubmissionAdded', handleSubmissionAdded);
+    return () => {
+      window.removeEventListener('ptzSubmissionAdded', handleSubmissionAdded);
+    };
+  }, []);
+
   if (!isAuthenticated) {
     return (
       <div className="container mx-auto py-20 flex justify-center">
@@ -512,6 +523,7 @@ export default function Admin() {
                     <TableHead>Montant PTZ</TableHead>
                     <TableHead>Non propriétaire</TableHead>
                     <TableHead>Raison</TableHead>
+                    <TableHead>Lieu de recherche</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -523,7 +535,13 @@ export default function Admin() {
                           onCheckedChange={() => handleSelectSubmission(index)}
                         />
                       </TableCell>
-                      <TableCell>{sub.submissionDate}</TableCell>
+                      <TableCell>
+                        {sub.submissionDate
+                          ? sub.submissionDate.includes(' ')
+                            ? sub.submissionDate
+                            : `${sub.submissionDate} 00:00:00`
+                          : '-'}
+                      </TableCell>
                       <TableCell>{`${sub.firstName} ${sub.lastName}`}</TableCell>
                       <TableCell>{sub.email}</TableCell>
                       <TableCell>{sub.phone || "-"}</TableCell>
@@ -567,6 +585,7 @@ export default function Admin() {
                       <TableCell>{sub.ptzAmount ? `${sub.ptzAmount} €` : "-"}</TableCell>
                       <TableCell>{sub.notOwnerForTwoYears ? "Oui" : "Non"}</TableCell>
                       <TableCell>{sub.reason || "-"}</TableCell>
+                      <TableCell>{sub.selectedCommune?.commune || '-'}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
