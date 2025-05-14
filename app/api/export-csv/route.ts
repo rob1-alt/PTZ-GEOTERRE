@@ -60,17 +60,69 @@ function readSubmissions(): any[] {
   const standardSubmissions = readSubmissionsFromFile(DATA_FILE_PATH);
   const tempSubmissions = readSubmissionsFromFile(TEMP_DATA_FILE_PATH);
   
-  // Combiner les résultats
-  const allSubmissions = [...standardSubmissions, ...tempSubmissions];
+  // Utiliser une Map pour identifier les doublons basés sur la combinaison des champs uniques
+  const uniqueSubmissions = new Map();
+  
+  // Fonction pour créer une clé unique pour chaque soumission
+  const getSubmissionKey = (submission: any) => {
+    // Créer une clé basée sur les champs qui devraient être uniques
+    // Si la date de soumission existe, utilisons-la comme base principale
+    if (submission.submissionDate) {
+      return `${submission.submissionDate}_${submission.email}_${submission.firstName}_${submission.lastName}`;
+    }
+    // Sinon, utilisons juste l'email et le nom/prénom
+    return `${submission.email}_${submission.firstName}_${submission.lastName}`;
+  };
+
+  // Ajouter les soumissions standards d'abord (priorité plus basse)
+  standardSubmissions.forEach(submission => {
+    const key = getSubmissionKey(submission);
+    if (!uniqueSubmissions.has(key)) {
+      uniqueSubmissions.set(key, submission);
+    }
+  });
+
+  // Ajouter ensuite les soumissions temporaires (priorité plus haute, car potentiellement plus récentes)
+  tempSubmissions.forEach(submission => {
+    const key = getSubmissionKey(submission);
+    // Remplacer toujours par les versions du fichier temporaire car elles sont plus récentes
+    uniqueSubmissions.set(key, submission);
+  });
+
+  // Convertir la Map en tableau
+  const allSubmissions = Array.from(uniqueSubmissions.values());
   
   // Trier par date de soumission (du plus récent au plus ancien)
   allSubmissions.sort((a, b) => {
-    const dateA = new Date(a.submissionDate?.replace(/(\d+)\/(\d+)\/(\d+)/, '$3-$2-$1') || 0);
-    const dateB = new Date(b.submissionDate?.replace(/(\d+)\/(\d+)\/(\d+)/, '$3-$2-$1') || 0);
+    // Fonction pour convertir une date française en objet Date
+    const parseFrenchDate = (dateStr: string) => {
+      if (!dateStr) return new Date(0);
+      // Format DD/MM/YYYY HH:mm:ss
+      const [datePart, timePart] = dateStr.split(' ');
+      if (!datePart) return new Date(0);
+      
+      const [day, month, year] = datePart.split('/').map(Number);
+      if (!year || !month || !day) return new Date(0);
+      
+      if (timePart) {
+        const [hours, minutes, seconds] = timePart.split(':').map(Number);
+        return new Date(year, month - 1, day, hours || 0, minutes || 0, seconds || 0);
+      }
+      
+      return new Date(year, month - 1, day);
+    };
+    
+    const dateA = parseFrenchDate(a.submissionDate);
+    const dateB = parseFrenchDate(b.submissionDate);
+    
     return dateB.getTime() - dateA.getTime();
   });
   
-  console.log(`CSV - Total des entrées combinées: ${allSubmissions.length}`);
+  console.log(`CSV - Total des entrées combinées après suppression des doublons: ${allSubmissions.length}`);
+  console.log('CSV - Dates des 5 premières entrées (triées):');
+  allSubmissions.slice(0, 5).forEach((sub, i) => {
+    console.log(`  ${i + 1}: ${sub.submissionDate} - ${sub.firstName} ${sub.lastName}`);
+  });
   
   return allSubmissions;
 }

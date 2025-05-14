@@ -29,95 +29,135 @@ const DATA_FILE_PATH = path.join(process.cwd(), "data", "submissions.json")
 // Chemin alternatif utilisant le répertoire temporaire du système
 const TEMP_DATA_FILE_PATH = path.join(os.tmpdir(), "ptz_geoterre_submissions.json")
 
-// Fonction pour s'assurer que le répertoire de données existe
-function ensureDataDirectory() {
-  console.log('Création/vérification du répertoire de données...')
-  console.log('Chemin courant:', process.cwd())
-  console.log('Chemin complet du fichier:', DATA_FILE_PATH)
-  
-  // Tentative d'utiliser le répertoire de données standard
-  let useStandardPath = true
-  const dataDir = path.join(process.cwd(), "data")
-  
-  if (!fs.existsSync(dataDir)) {
-    console.log('Le répertoire data n\'existe pas, tentative de création...')
-    try {
-      fs.mkdirSync(dataDir, { recursive: true })
-      console.log('Répertoire data créé avec succès')
-    } catch (error) {
-      console.error('Erreur lors de la création du répertoire data:', error)
-      console.log('Utilisation du répertoire temporaire comme alternative')
-      useStandardPath = false
-    }
-  } else {
-    console.log('Le répertoire data existe déjà')
-    
-    // Vérifier si le répertoire est accessible en écriture
-    try {
-      fs.accessSync(dataDir, fs.constants.W_OK)
-      console.log('Le répertoire data est accessible en écriture')
-    } catch (error) {
-      console.error('Le répertoire data n\'est pas accessible en écriture:', error)
-      console.log('Utilisation du répertoire temporaire comme alternative')
-      useStandardPath = false
-    }
+// Fonction pour lire les données d'un fichier spécifique
+function readSubmissionsFromFile(filePath: string): any[] {
+  if (!fs.existsSync(filePath)) {
+    console.log(`Le fichier ${filePath} n'existe pas`);
+    return [];
   }
 
-  // Si le chemin standard n'est pas utilisable, utiliser le répertoire temporaire
-  const currentPath = useStandardPath ? DATA_FILE_PATH : TEMP_DATA_FILE_PATH
-  console.log('Chemin final utilisé:', currentPath)
-
-  // Créer un fichier vide s'il n'existe pas
-  if (!fs.existsSync(currentPath)) {
-    console.log(`Le fichier ${path.basename(currentPath)} n'existe pas, tentative de création...`)
-    try {
-      fs.writeFileSync(currentPath, JSON.stringify([]))
-      console.log(`Fichier ${path.basename(currentPath)} créé avec succès`)
-    } catch (error) {
-      console.error(`Erreur lors de la création du fichier ${path.basename(currentPath)}:`, error)
-      throw new Error(`Impossible de créer le fichier ${path.basename(currentPath)}: ${error instanceof Error ? error.message : 'Erreur inconnue'}`)
-    }
-  } else {
-    console.log(`Le fichier ${path.basename(currentPath)} existe déjà`)
-    
-    // Vérifier si le fichier est accessible en écriture
-    try {
-      fs.accessSync(currentPath, fs.constants.W_OK)
-      console.log(`Le fichier ${path.basename(currentPath)} est accessible en écriture`)
-    } catch (error) {
-      console.error(`Le fichier ${path.basename(currentPath)} n'est pas accessible en écriture:`, error)
-      throw new Error(`Le fichier ${path.basename(currentPath)} n'est pas accessible en écriture: ${error instanceof Error ? error.message : 'Erreur inconnue'}`)
-    }
+  try {
+    console.log(`Lecture du fichier ${path.basename(filePath)}...`);
+    const data = fs.readFileSync(filePath, "utf8");
+    const parsedData = JSON.parse(data);
+    console.log(`Fichier ${path.basename(filePath)} lu avec succès, contient ${parsedData.length} entrées`);
+    return parsedData;
+  } catch (error) {
+    console.error(`Erreur lors de la lecture des données depuis ${path.basename(filePath)}:`, error);
+    return [];
   }
-  
-  return currentPath
 }
 
-// Fonction pour lire les données existantes
+// Fonction pour lire toutes les données disponibles
 function readSubmissions(): any[] {
-  const filePath = ensureDataDirectory()
-  try {
-    console.log(`Lecture du fichier ${path.basename(filePath)}...`)
-    const data = fs.readFileSync(filePath, "utf8")
-    const parsedData = JSON.parse(data)
-    console.log(`Fichier lu avec succès, contient ${parsedData.length} entrées`)
-    return parsedData
-  } catch (error) {
-    console.error("Erreur lors de la lecture des données:", error)
-    throw new Error(`Erreur lors de la lecture des données: ${error instanceof Error ? error.message : 'Erreur inconnue'}`)
-  }
+  // Tenter de lire à partir des deux emplacements
+  const standardSubmissions = readSubmissionsFromFile(DATA_FILE_PATH);
+  const tempSubmissions = readSubmissionsFromFile(TEMP_DATA_FILE_PATH);
+  
+  // Utiliser une Map pour identifier les doublons basés sur la combinaison des champs uniques
+  const uniqueSubmissions = new Map();
+  
+  // Fonction pour créer une clé unique pour chaque soumission
+  const getSubmissionKey = (submission: any) => {
+    // Créer une clé basée sur les champs qui devraient être uniques
+    // Si la date de soumission existe, utilisons-la comme base principale
+    if (submission.submissionDate) {
+      return `${submission.submissionDate}_${submission.email}_${submission.firstName}_${submission.lastName}`;
+    }
+    // Sinon, utilisons juste l'email et le nom/prénom
+    return `${submission.email}_${submission.firstName}_${submission.lastName}`;
+  };
+
+  // Ajouter les soumissions standards d'abord (priorité plus basse)
+  standardSubmissions.forEach(submission => {
+    const key = getSubmissionKey(submission);
+    if (!uniqueSubmissions.has(key)) {
+      uniqueSubmissions.set(key, submission);
+    }
+  });
+
+  // Ajouter ensuite les soumissions temporaires (priorité plus haute, car potentiellement plus récentes)
+  tempSubmissions.forEach(submission => {
+    const key = getSubmissionKey(submission);
+    // Remplacer toujours par les versions du fichier temporaire car elles sont plus récentes
+    uniqueSubmissions.set(key, submission);
+  });
+
+  // Convertir la Map en tableau
+  const allSubmissions = Array.from(uniqueSubmissions.values());
+  
+  // Trier par date de soumission (du plus récent au plus ancien)
+  allSubmissions.sort((a, b) => {
+    // Fonction pour convertir une date française en objet Date
+    const parseFrenchDate = (dateStr: string) => {
+      if (!dateStr) return new Date(0);
+      // Format DD/MM/YYYY HH:mm:ss
+      const [datePart, timePart] = dateStr.split(' ');
+      if (!datePart) return new Date(0);
+      
+      const [day, month, year] = datePart.split('/').map(Number);
+      if (!year || !month || !day) return new Date(0);
+      
+      if (timePart) {
+        const [hours, minutes, seconds] = timePart.split(':').map(Number);
+        return new Date(year, month - 1, day, hours || 0, minutes || 0, seconds || 0);
+      }
+      
+      return new Date(year, month - 1, day);
+    };
+    
+    const dateA = parseFrenchDate(a.submissionDate);
+    const dateB = parseFrenchDate(b.submissionDate);
+    
+    return dateB.getTime() - dateA.getTime();
+  });
+  
+  console.log(`Total des entrées combinées après suppression des doublons: ${allSubmissions.length}`);
+  console.log('Dates des 3 premières entrées (triées):');
+  allSubmissions.slice(0, 3).forEach((sub, i) => {
+    console.log(`  ${i + 1}: ${sub.submissionDate} - ${sub.firstName} ${sub.lastName}`);
+  });
+  
+  return allSubmissions;
 }
 
 // Fonction pour écrire les données
 function writeSubmissions(submissions: any[]) {
-  const filePath = ensureDataDirectory()
+  // Essayer d'abord d'écrire dans le répertoire standard
   try {
-    console.log(`Écriture de ${submissions.length} entrées dans le fichier ${path.basename(filePath)}...`)
-    fs.writeFileSync(filePath, JSON.stringify(submissions, null, 2))
-    console.log('Données écrites avec succès')
+    const dataDir = path.join(process.cwd(), "data");
+    
+    // Vérifier si le répertoire existe, sinon le créer
+    if (!fs.existsSync(dataDir)) {
+      console.log('Le répertoire data n\'existe pas, tentative de création...');
+      fs.mkdirSync(dataDir, { recursive: true });
+      console.log('Répertoire data créé avec succès');
+    }
+    
+    // Vérifier les permissions en écriture
+    try {
+      fs.accessSync(dataDir, fs.constants.W_OK);
+      console.log(`Écriture de ${submissions.length} entrées dans ${DATA_FILE_PATH}...`);
+      fs.writeFileSync(DATA_FILE_PATH, JSON.stringify(submissions, null, 2));
+      console.log('Données écrites avec succès dans le répertoire standard');
+      return; // Si l'écriture réussit, on sort de la fonction
+    } catch (accessError) {
+      console.error('Le répertoire data n\'est pas accessible en écriture:', accessError);
+      // Continuer à essayer avec le répertoire temporaire
+    }
+  } catch (dirError) {
+    console.error('Erreur lors de la création/accès au répertoire data:', dirError);
+    // Continuer à essayer avec le répertoire temporaire
+  }
+  
+  // Si l'écriture dans le répertoire standard échoue, utiliser le répertoire temporaire
+  try {
+    console.log(`Écriture de ${submissions.length} entrées dans ${TEMP_DATA_FILE_PATH}...`);
+    fs.writeFileSync(TEMP_DATA_FILE_PATH, JSON.stringify(submissions, null, 2));
+    console.log('Données écrites avec succès dans le répertoire temporaire');
   } catch (error) {
-    console.error("Erreur lors de l'écriture des données:", error)
-    throw new Error(`Erreur lors de l'écriture des données: ${error instanceof Error ? error.message : 'Erreur inconnue'}`)
+    console.error('Erreur lors de l\'écriture dans le répertoire temporaire:', error);
+    throw new Error(`Impossible d'écrire les données: ${error instanceof Error ? error.message : 'Erreur inconnue'}`);
   }
 }
 
@@ -128,7 +168,7 @@ export async function storeSubmission(data: SubmissionData) {
     console.log('Environnement:', process.env.NODE_ENV);
     
     // Lire les données existantes
-    const submissions = readSubmissions()
+    const submissions = readSubmissions();
 
     // Ajouter la nouvelle soumission avec une date
     const submissionWithDate = {
@@ -137,8 +177,8 @@ export async function storeSubmission(data: SubmissionData) {
     }
 
     // Ajouter au tableau et sauvegarder
-    submissions.push(submissionWithDate)
-    writeSubmissions(submissions)
+    submissions.unshift(submissionWithDate); // Ajouter au début pour avoir les plus récentes en premier
+    writeSubmissions(submissions);
     
     // Envoyer l'email de confirmation
     try {
@@ -161,9 +201,6 @@ export async function storeSubmission(data: SubmissionData) {
       console.error('Erreur lors de l\'envoi de l\'email:', emailError);
       // Ne pas faire échouer la soumission si l'envoi d'email échoue
     }
-    
-    // NOTE: Suppression de la tentative d'envoi à Google Sheets via fetch
-    // Cette méthode ne fonctionne pas car l'URL n'est pas une API
 
     return { success: true }
   } catch (error) {

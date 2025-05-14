@@ -60,6 +60,7 @@ export default function Admin() {
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
     setAuthError(null);
+    setLoading(true);
 
     if (username === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
       setIsAuthenticated(true);
@@ -68,6 +69,7 @@ export default function Admin() {
       fetchSubmissions();
     } else {
       setAuthError('Identifiants incorrects. Veuillez réessayer.');
+      setLoading(false);
     }
   };
 
@@ -76,9 +78,13 @@ export default function Admin() {
     Cookies.remove('ptz_admin_auth');
     setUsername('');
     setPassword('');
+    setLoading(false);
   };
 
   const fetchSubmissions = async () => {
+    setLoading(true);
+    setError(null);
+    
     try {
       const response = await fetch('/api/sheets', {
         cache: 'no-store',
@@ -88,34 +94,61 @@ export default function Admin() {
           'Expires': '0'
         }
       });
+      
       if (!response.ok) {
         throw new Error(`Erreur HTTP: ${response.status}`);
       }
+      
       const data = await response.json();
       console.log('Données reçues:', data);
+      
       if (!data.submissions || !Array.isArray(data.submissions)) {
         throw new Error('Format de données invalide');
       }
-      // Comparer les nouvelles données avec les anciennes
-      const newSubmissionsString = JSON.stringify(data.submissions);
-      const currentSubmissionsString = JSON.stringify(submissions);
       
-      // Ne mettre à jour que si les données ont changé
-      if (newSubmissionsString !== currentSubmissionsString) {
-        setSubmissions(data.submissions);
-      }
+      setSubmissions(data.submissions);
+      setLoading(false);
     } catch (err) {
-      setError('Erreur lors de la récupération des données');
       console.error('Erreur:', err);
+      setError('Erreur lors de la récupération des données: ' + (err instanceof Error ? err.message : String(err)));
+      setLoading(false);
     }
   };
 
   // Ajouter un intervalle de rafraîchissement
   useEffect(() => {
     if (isAuthenticated) {
+      // Appel initial
       fetchSubmissions();
-      // Rafraîchir toutes les 2 minutes au lieu de 30 secondes
-      const interval = setInterval(fetchSubmissions, 120000);
+      
+      // Rafraîchir toutes les 2 minutes
+      const interval = setInterval(() => {
+        // Ne pas mettre loading à true pour les rafraîchissements automatiques
+        // pour éviter de bloquer l'interface
+        setError(null);
+        fetch('/api/sheets', {
+          cache: 'no-store',
+          headers: {
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0'
+          }
+        })
+          .then(response => {
+            if (!response.ok) throw new Error(`Erreur HTTP: ${response.status}`);
+            return response.json();
+          })
+          .then(data => {
+            if (data.submissions && Array.isArray(data.submissions)) {
+              setSubmissions(data.submissions);
+            }
+          })
+          .catch(err => {
+            console.error('Erreur de rafraîchissement:', err);
+            // Ne pas afficher d'erreur pour les rafraîchissements automatiques
+          });
+      }, 120000);
+      
       return () => clearInterval(interval);
     }
   }, [isAuthenticated]);
