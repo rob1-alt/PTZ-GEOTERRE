@@ -215,9 +215,58 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    console.log('=== DÉBUT API GET SHEETS ===');
+    console.log(`Date/heure: ${new Date().toISOString()}`);
+    console.log(`Environnement: ${process.env.NODE_ENV || 'non défini'}`);
+    console.log(`Chemin absolu: ${process.cwd()}`);
+    
+    // Vérification des chemins de fichiers
+    console.log(`Chemin standard: ${DATA_FILE_PATH}`);
+    console.log(`Chemin temporaire: ${TEMP_DATA_FILE_PATH}`);
+    
+    // Vérification de l'existence des fichiers
+    const standardExists = fs.existsSync(DATA_FILE_PATH);
+    const tempExists = fs.existsSync(TEMP_DATA_FILE_PATH);
+    console.log(`Fichier standard existe: ${standardExists ? 'Oui' : 'Non'}`);
+    console.log(`Fichier temporaire existe: ${tempExists ? 'Oui' : 'Non'}`);
+    
+    // Lire les tailles de fichiers si ils existent
+    if (standardExists) {
+      try {
+        const stats = fs.statSync(DATA_FILE_PATH);
+        console.log(`Taille du fichier standard: ${stats.size} octets`);
+      } catch (err) {
+        console.error(`Erreur lors de la lecture des statistiques du fichier standard:`, err);
+      }
+    }
+    
+    if (tempExists) {
+      try {
+        const stats = fs.statSync(TEMP_DATA_FILE_PATH);
+        console.log(`Taille du fichier temporaire: ${stats.size} octets`);
+      } catch (err) {
+        console.error(`Erreur lors de la lecture des statistiques du fichier temporaire:`, err);
+      }
+    }
+    
+    // Lire les données
     const submissions = readSubmissions();
+    console.log(`Nombre total de soumissions: ${submissions.length}`);
+    
+    // Afficher un aperçu des données
+    if (submissions.length > 0) {
+      console.log('Aperçu des soumissions:');
+      submissions.slice(0, 3).forEach((sub, index) => {
+        console.log(`  ${index + 1}: ${sub.submissionDate} - ${sub.firstName} ${sub.lastName} (${sub.email})`);
+      });
+    } else {
+      console.log('Aucune soumission trouvée');
+    }
+    
+    console.log('=== FIN API GET SHEETS - SUCCÈS ===');
     return NextResponse.json({ submissions });
   } catch (error) {
+    console.error('=== FIN API GET SHEETS - ERREUR ===');
     console.error('API - Erreur lors de la récupération des données:', error);
     return NextResponse.json({ 
       error: 'Erreur lors de la récupération des données',

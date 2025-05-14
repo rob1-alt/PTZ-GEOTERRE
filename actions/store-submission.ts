@@ -163,25 +163,81 @@ function writeSubmissions(submissions: any[]) {
 
 export async function storeSubmission(data: SubmissionData) {
   try {
-    console.log('Tentative d\'enregistrement des données...');
-    console.log('Données reçues:', data);
-    console.log('Environnement:', process.env.NODE_ENV);
+    console.log('=== DÉBUT STORE SUBMISSION ===');
+    console.log(`Date/heure: ${new Date().toISOString()}`);
+    console.log(`Environnement: ${process.env.NODE_ENV || 'non défini'}`);
+    console.log(`Chemin absolu: ${process.cwd()}`);
+    console.log(`Données reçues: ${JSON.stringify(data, null, 2)}`);
     
     // Lire les données existantes
+    console.log('Lecture des données existantes...');
     const submissions = readSubmissions();
+    console.log(`Nombre de soumissions existantes: ${submissions.length}`);
 
     // Ajouter la nouvelle soumission avec une date
+    const currentDate = new Date();
+    const formattedDate = currentDate.toLocaleString("fr-FR");
+    console.log(`Date de soumission formatée: ${formattedDate}`);
+    
     const submissionWithDate = {
       ...data,
-      submissionDate: new Date().toLocaleString("fr-FR"),
+      submissionDate: formattedDate,
+    }
+    console.log(`Nouvelle soumission à ajouter: ${JSON.stringify(submissionWithDate, null, 2)}`);
+
+    // Vérifier si une soumission similaire existe déjà
+    const submissionKey = `${submissionWithDate.email}_${submissionWithDate.firstName}_${submissionWithDate.lastName}`;
+    const existingSimilar = submissions.find(sub => 
+      `${sub.email}_${sub.firstName}_${sub.lastName}` === submissionKey
+    );
+    
+    if (existingSimilar) {
+      console.log(`Attention: une soumission similaire existe déjà pour ${submissionKey}`);
+      console.log(`Date existante: ${existingSimilar.submissionDate}`);
     }
 
     // Ajouter au tableau et sauvegarder
     submissions.unshift(submissionWithDate); // Ajouter au début pour avoir les plus récentes en premier
-    writeSubmissions(submissions);
+    console.log(`Nouvelle longueur du tableau: ${submissions.length}`);
+    console.log('Écriture des données...');
+    
+    // Tester les deux chemins d'écriture avant d'appeler writeSubmissions
+    const dataDir = path.join(process.cwd(), "data");
+    console.log(`Répertoire de données standard: ${dataDir}`);
+    console.log(`Existe: ${fs.existsSync(dataDir) ? 'Oui' : 'Non'}`);
+    
+    if (fs.existsSync(dataDir)) {
+      try {
+        fs.accessSync(dataDir, fs.constants.W_OK);
+        console.log('Répertoire standard accessible en écriture: Oui');
+      } catch (e) {
+        console.log('Répertoire standard accessible en écriture: Non');
+        console.log(`Erreur d'accès: ${e instanceof Error ? e.message : String(e)}`);
+      }
+    }
+    
+    console.log(`Chemin temporaire: ${TEMP_DATA_FILE_PATH}`);
+    console.log(`Dossier temporaire existe: ${fs.existsSync(path.dirname(TEMP_DATA_FILE_PATH)) ? 'Oui' : 'Non'}`);
+    console.log(`Fichier temporaire existe: ${fs.existsSync(TEMP_DATA_FILE_PATH) ? 'Oui' : 'Non'}`);
+    
+    try {
+      writeSubmissions(submissions);
+      console.log('Écriture réussie');
+    } catch (writeError) {
+      console.error('Erreur lors de l\'écriture:', writeError);
+      // Essayer une méthode de secours - écrire directement dans le fichier temporaire
+      try {
+        console.log('Tentative d\'écriture de secours dans le fichier temporaire...');
+        fs.writeFileSync(TEMP_DATA_FILE_PATH, JSON.stringify(submissions, null, 2));
+        console.log('Écriture de secours réussie');
+      } catch (fallbackError) {
+        console.error('Échec de l\'écriture de secours:', fallbackError);
+      }
+    }
     
     // Envoyer l'email de confirmation
     try {
+      console.log('Envoi de l\'email de confirmation...');
       const emailTemplate = generatePTZConfirmationEmail({
         firstName: data.firstName,
         lastName: data.lastName,
@@ -202,8 +258,10 @@ export async function storeSubmission(data: SubmissionData) {
       // Ne pas faire échouer la soumission si l'envoi d'email échoue
     }
 
+    console.log('=== FIN STORE SUBMISSION - SUCCÈS ===');
     return { success: true }
   } catch (error) {
+    console.error('=== FIN STORE SUBMISSION - ERREUR ===');
     console.error('Erreur lors de l\'enregistrement des données:', error);
     return { 
       success: false, 
