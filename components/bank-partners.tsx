@@ -30,8 +30,8 @@ export function BankPartners({ onBack }: { onBack: () => void }) {
           <div className="bg-green-50 p-6 rounded-lg border border-green-100">
             <h3 className="text-xl font-semibold text-green-800 mb-4">Nous facilitons votre demande de PTZ</h3>
             <p className="text-green-700 mb-6">
-              Grâce à nos relations privilégiées avec nos partenaires bancaires, nous pouvons étudier votre dossier 
-              et vous mettre en relation avec l'établissement le plus adapté à votre situation.
+              Grâce à nos relations privilégiées avec nos partenaires bancaires, nous étudierons votre dossier 
+              et vous mettrons en relation avec l'établissement le plus adapté.
             </p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="flex items-start space-x-3">
@@ -40,7 +40,7 @@ export function BankPartners({ onBack }: { onBack: () => void }) {
                 </div>
                 <div>
                   <h4 className="font-medium text-green-800 mb-1">Téléphone</h4>
-                  <p className="text-green-700">01 64 71 18 70</p>
+                  <p className="text-green-700">01 64 71 18 75</p>
                   <p className="text-sm text-green-600 mt-1">Du lundi au vendredi, 9h-18h</p>
                 </div>
               </div>
@@ -50,7 +50,7 @@ export function BankPartners({ onBack }: { onBack: () => void }) {
                 </div>
                 <div>
                   <h4 className="font-medium text-green-800 mb-1">Email</h4>
-                  <p className="text-green-700">s.engel@geoterre.fr</p>
+                  <p className="text-green-700">info@simulateur-ptz-2025.fr</p>
                   <p className="text-sm text-green-600 mt-1">Réponse sous 24h ouvrées</p>
                 </div>
               </div>
@@ -59,8 +59,7 @@ export function BankPartners({ onBack }: { onBack: () => void }) {
 
           <div className="mt-8 text-center">
             <p className="text-sm text-gray-600 mb-4">
-              Contactez l'un de nos partenaires pour finaliser votre demande de PTZ. Nos conseillers sont à votre
-              disposition pour vous accompagner dans vos démarches.
+              Nos conseillers sont à votre disposition pour vous accompagner dans vos démarches.
             </p>
             <Button onClick={onBack} variant="outline" className="flex items-center gap-1">
               <ArrowLeft className="h-4 w-4" /> Retour aux résultats

@@ -518,6 +518,16 @@ export default function PtzCalculator() {
       return;
     }
 
+    // Si le client a été propriétaire, il n'est pas éligible
+    if (formData.notOwnerForTwoYears) {
+      setResult({
+        eligible: false,
+        reason: "Vous avez été propriétaire de votre résidence principale au cours des deux dernières années, vous n'êtes donc pas éligible au PTZ."
+      });
+      setIsSubmitting(false);
+      return;
+    }
+
     setIsSubmitting(true);
     setSubmissionError(null);
 
@@ -677,7 +687,7 @@ export default function PtzCalculator() {
                     <SelectValue placeholder="Sélectionnez" />
                   </SelectTrigger>
                   <SelectContent>
-                    {[1, 2, 3, 4, 5, 6, 7, 8].map((num) => (
+                    {[1, 2, 3, 4, 5, 6, 7].map((num) => (
                       <SelectItem key={num} value={num.toString()}>
                         {num} {num === 1 ? "personne" : "personnes"}
                       </SelectItem>
