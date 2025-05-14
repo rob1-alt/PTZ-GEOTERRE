@@ -16,16 +16,16 @@ export function BankPartners({ onBack }: { onBack: () => void }) {
         </div>
         <CardTitle className="text-2xl">Nos partenaires bancaires</CardTitle>
         <CardDescription className="text-lg mt-2">
-          Ces établissements peuvent vous accompagner dans votre demande de PTZ
+          Nous sommes en partenariat avec des entités bancaires.
         </CardDescription>
       </CardHeader>
       <CardContent>
         <div className="space-y-8">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          {/* <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
             <BankLogo name="Crédit Mutuel" color="#008B3D" initials="CM" />
             <BankLogo name="Crédit du Nord" color="#00692E" initials="CDN" />
             <BankLogo name="Société Générale" color="#005827" initials="SG" />
-          </div>
+          </div> */}
 
           <div className="bg-green-50 p-6 rounded-lg border border-green-100">
             <h3 className="text-xl font-semibold text-green-800 mb-4">Nous facilitons votre demande de PTZ</h3>
@@ -40,7 +40,7 @@ export function BankPartners({ onBack }: { onBack: () => void }) {
                 </div>
                 <div>
                   <h4 className="font-medium text-green-800 mb-1">Téléphone</h4>
-                  <p className="text-green-700">01 23 45 67 89</p>
+                  <p className="text-green-700">01 64 71 18 70</p>
                   <p className="text-sm text-green-600 mt-1">Du lundi au vendredi, 9h-18h</p>
                 </div>
               </div>
@@ -50,7 +50,7 @@ export function BankPartners({ onBack }: { onBack: () => void }) {
                 </div>
                 <div>
                   <h4 className="font-medium text-green-800 mb-1">Email</h4>
-                  <p className="text-green-700">contact@geoterre.fr</p>
+                  <p className="text-green-700">s.engel@geoterre.fr</p>
                   <p className="text-sm text-green-600 mt-1">Réponse sous 24h ouvrées</p>
                 </div>
               </div>
