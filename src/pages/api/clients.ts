@@ -17,6 +17,8 @@ export default async function handler(
         return res.status(400).json({ error: 'No data received' });
       }
       
+
+      
       const clientData: ClientData = req.body;
       console.log('Parsed client data:', clientData);
       
