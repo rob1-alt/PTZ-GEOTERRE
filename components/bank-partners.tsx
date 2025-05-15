@@ -57,6 +57,9 @@ export function BankPartners({ onBack }: { onBack: () => void }) {
             </div>
           </div>
 
+
+          
+
           <div className="mt-8 text-center">
             <p className="text-sm text-gray-600 mb-4">
               Nos conseillers sont à votre disposition pour vous accompagner dans vos démarches.
