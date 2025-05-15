@@ -50,7 +50,7 @@ export function BankPartners({ onBack }: { onBack: () => void }) {
                 </div>
                 <div>
                   <h4 className="font-medium text-green-800 mb-1">Email</h4>
-                  <p className="text-green-700">info@simulateur-ptz-2025.fr</p>
+                  <p className="text-green-700">contact@geoterre.fr</p>
                   <p className="text-sm text-green-600 mt-1">Réponse sous 24h ouvrées</p>
                 </div>
               </div>
